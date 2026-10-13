@@ -92,7 +92,9 @@ nonisolated final class ChunkedStreamLoader: NSObject, AVAssetResourceLoaderDele
                 while offset < end {
                     try Task.checkCancellation()
                     let chunk = try await fetch(from: offset, through: min(end, offset + Self.chunkSize) - 1)
-                    guard !chunk.isEmpty else { break }
+                    guard !chunk.isEmpty else {
+                        throw URLError(.zeroByteResource, userInfo: [NSLocalizedDescriptionKey: "Stream returned no bytes at offset \(offset)"])
+                    }
                     try Task.checkCancellation()
                     dataRequest.respond(with: chunk)
                     offset += Int64(chunk.count)
@@ -129,11 +131,9 @@ nonisolated final class ChunkedStreamLoader: NSObject, AVAssetResourceLoaderDele
             }
             return data
         case 200:
-            // Server ignored the range and sent the whole resource.
-            state.withLock { $0.contentLength = Int64(data.count) }
-            let lower = Int(min(start, Int64(data.count)))
-            let upper = Int(min(end + 1, Int64(data.count)))
-            return data.subdata(in: lower..<upper)
+            // The server ignored the range and sent the whole resource. Slicing it per chunk would
+            // re-download the entire stream on every request, so reject it instead.
+            throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Stream ignored the byte range (HTTP 200)"])
         default:
             // 403 means the signed URL expired or was refused; the player's recovery re-resolves it.
             throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Stream returned HTTP \(http.statusCode)"])
