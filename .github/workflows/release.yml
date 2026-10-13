@@ -20,8 +20,14 @@ jobs:
 
       - name: Build and sign
         run: |
+          # bundle.sh substitutes the version into Info.plist with sed; allow only vX.Y.Z[-suffix].
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not vX.Y.Z or vX.Y.Z-suffix"
+            exit 1
+          fi
           swift --version
-          VERSION="${GITHUB_REF_NAME#v}" ./scripts/bundle.sh
+          VERSION="$version" ./scripts/bundle.sh
 
       - name: Create zip
         run: ditto -c -k --sequesterRsrc --keepParent build/Undertone.app Undertone.zip
