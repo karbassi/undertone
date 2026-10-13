@@ -42,6 +42,14 @@ import Testing
         #expect(store["a"] == nil)
     }
 
+    @Test func savedPositionBeatsTheLinksTimestamp() {
+        var store = PlaybackPositions()
+        store.record(2843, duration: mix, forKey: "a")
+        #expect(store.start(forKey: "a", linkStart: 5) == 2843)
+        #expect(store.start(forKey: "b", linkStart: 5) == 5)
+        #expect(store.start(forKey: "b", linkStart: nil) == nil)
+    }
+
     @Test func dropsTheOldestPastTheLimit() {
         var store = PlaybackPositions()
         for i in 0...PlaybackPositions.limit {

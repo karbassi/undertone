@@ -40,6 +40,11 @@ public struct PlaybackPositions: Equatable, Sendable {
 
     public subscript(key: String) -> SavedPosition? { entries[key] }
 
+    /// Where to start `key`: a saved position beats the link's own `t=`, since copied links often carry one by accident.
+    public func start(forKey key: String, linkStart: Double?) -> Double? {
+        entries[key]?.seconds ?? linkStart
+    }
+
     /// Remembers `seconds` into a track of `duration`. Near the start or the end it forgets the track
     /// instead, so a finished mix starts over and one barely begun isn't worth resuming.
     public mutating func record(_ seconds: Double, duration: Double?, forKey key: String, at date: Date = Date()) {

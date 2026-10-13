@@ -202,8 +202,7 @@ final class PlayerEngine {
             openPlaylist(link)
         } else {
             queue = nil
-            // A saved position beats the link's own `t=`: copied YouTube links often carry one by accident.
-            resolveAndPlay(link, startAt: settings.positions[link.cacheKey]?.seconds ?? link.startTime)
+            resolveAndPlay(link, startAt: settings.positions.start(forKey: link.cacheKey, linkStart: link.startTime))
         }
     }
 
@@ -225,14 +224,16 @@ final class PlayerEngine {
                 } catch where isMix && !Task.isCancelled {
                     // Listing a Mix can fail where the video itself plays fine; keep the music going.
                     self.notice = "Couldn't load the Mix, so just this video plays."
-                    self.resolveAndPlay(MediaLink(original: link.original, kind: .video(id: link.videoID ?? "")), startAt: link.startTime)
+                    let video = MediaLink(original: link.original, kind: .video(id: link.videoID ?? ""))
+                    self.resolveAndPlay(video, startAt: self.settings.positions.start(forKey: video.cacheKey, linkStart: link.startTime))
                     return
                 }
                 guard !Task.isCancelled else { return }
                 // YouTube has Mixes only for some videos (mostly music). Without one, yt-dlp hands back the video itself.
                 if isMix, entries.count <= 1, let seed = link.videoID {
                     self.notice = "YouTube has no Mix for this video, so just this video plays."
-                    self.resolveAndPlay(MediaLink(original: link.original, kind: .video(id: seed)), startAt: link.startTime)
+                    let video = MediaLink(original: link.original, kind: .video(id: seed))
+                    self.resolveAndPlay(video, startAt: self.settings.positions.start(forKey: video.cacheKey, linkStart: link.startTime))
                     return
                 }
                 var startVideo = link.videoID   // a Mix starts from the video it was built on
@@ -247,7 +248,7 @@ final class PlayerEngine {
                 }
                 self.queue = queue
                 self.settings.recent.record(url: link.resolvedURL, title: queue.title ?? "Playlist")
-                self.resolveAndPlay(first.link, startAt: link.startTime)
+                self.resolveAndPlay(first.link, startAt: self.settings.positions.start(forKey: first.link.cacheKey, linkStart: link.startTime))
             } catch {
                 self.handle(error)
             }
@@ -343,7 +344,7 @@ final class PlayerEngine {
 
     private func load(_ track: Track, link: MediaLink, startAt: Double?, queueTarget: Int?) {
         if let current = currentLink, current.cacheKey != link.cacheKey { savePosition() }
-        // An explicit start (a recovery, an idle reload, a `t=`) wins; otherwise pick up where this track was left.
+        // An explicit start (a recovery, an idle reload, or a link's `t=` with no saved position) wins; nil picks up the saved position.
         let startAt = startAt ?? settings.positions[link.cacheKey]?.seconds
         teardownItem()
         idleUnloadTask?.cancel()
