@@ -139,6 +139,12 @@ final class AppSettings {
             defaults.set((try? positions.encoded()) ?? Data(), forKey: Keys.positions)
         }
     }
+
+    /// "Resume at 47:12 of 1:58:35" for a link whose mix was left partway; shown as a menu subtitle.
+    func resumeLabel(for url: URL) -> String? {
+        positions.position(for: url).map { "Resume at \(TimeFormat.clock($0.seconds)) of \(TimeFormat.clock($0.duration))" }
+    }
+
     var ytdlpPathOverride: String? {
         didSet { defaults.set(ytdlpPathOverride, forKey: Keys.ytdlpPath) }
     }

@@ -40,6 +40,11 @@ public struct PlaybackPositions: Equatable, Sendable {
 
     public subscript(key: String) -> SavedPosition? { entries[key] }
 
+    /// The saved position for a pasted or stored link, if any.
+    public func position(for url: URL) -> SavedPosition? {
+        LinkParser.parse(url.absoluteString).flatMap { entries[$0.cacheKey] }
+    }
+
     /// Remembers `seconds` into a track of `duration`. Near the start or the end it forgets the track
     /// instead, so a finished mix starts over and one barely begun isn't worth resuming.
     public mutating func record(_ seconds: Double, duration: Double?, forKey key: String, at date: Date = Date()) {

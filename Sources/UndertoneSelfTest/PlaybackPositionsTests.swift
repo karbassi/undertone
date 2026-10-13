@@ -51,4 +51,12 @@ import Testing
         #expect(store["v0"] == nil)
         #expect(store["v\(PlaybackPositions.limit)"] != nil)
     }
+
+    @Test func looksUpAnyFormOfTheLink() {
+        var store = PlaybackPositions()
+        store.record(1000, duration: mix, forKey: "p8ug6mn93xk")
+        #expect(store.position(for: URL(string: "https://www.youtube.com/watch?v=p8ug6mn93xk&t=5s")!)?.seconds == 1000)
+        #expect(store.position(for: URL(string: "https://youtu.be/p8ug6mn93xk")!)?.seconds == 1000)
+        #expect(store.position(for: URL(string: "https://www.youtube.com/watch?v=dQw4w9WgXcQ")!) == nil)
+    }
 }
