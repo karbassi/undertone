@@ -53,10 +53,11 @@ public struct PlaybackPositions: Equatable, Sendable {
     }
 
     /// Remembers `seconds` into a track of `duration`. Near the start or the end it forgets the track
-    /// instead, so a finished mix starts over and one barely begun isn't worth resuming.
+    /// instead, so a finished mix starts over and one barely begun isn't worth resuming. A track now
+    /// shorter than `minimumDuration` (a video trimmed since) is forgotten too.
     public mutating func record(_ seconds: Double, duration: Double?, forKey key: String, at date: Date = Date()) {
-        guard let duration, duration >= Self.minimumDuration, seconds.isFinite else { return }
-        guard seconds >= Self.edgeMargin, seconds <= duration - Self.edgeMargin else {
+        guard let duration, seconds.isFinite else { return }
+        guard duration >= Self.minimumDuration, seconds >= Self.edgeMargin, seconds <= duration - Self.edgeMargin else {
             entries[key] = nil
             return
         }

@@ -27,6 +27,13 @@ import Testing
         #expect(store.entries.isEmpty)
     }
 
+    @Test func forgetsATrackThatIsNowShort() {
+        var store = PlaybackPositions()
+        store.record(1000, duration: mix, forKey: "trimmed")
+        store.record(120, duration: 300, forKey: "trimmed")   // the video was cut under the minimum
+        #expect(store["trimmed"] == nil)
+    }
+
     @Test func forgetsNearEitherEnd() {
         var store = PlaybackPositions()
         store.record(1000, duration: mix, forKey: "a")
