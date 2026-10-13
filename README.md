@@ -33,7 +33,7 @@ Built for macOS 26 (Tahoe) with a real Liquid Glass panel you can tint to any co
 - **Global shortcuts:** configurable hotkeys for play/pause (`⌃⌥P`), cycle speed (`⌃⌥S`), open the panel
   (`⌃⌥Y`), and next/previous (`⌃⌥→` / `⌃⌥←`).
 - **Picks up where you left off:** anything 10 minutes or longer (a DJ mix, a podcast) remembers its position per video, across quits and restarts. Recent and ★ entries show "Resume at 47:12 of 1:58:35". Finish it, or scrub back to the start, and it starts over next time. A saved position beats a link's own `t=`.
-- **Long mixes start instantly:** YouTube throttles the native player's open-ended requests to about twice real time, which left multi-hour mixes stuck loading. Undertone fetches YouTube audio in 1 MB ranges instead, so a two-hour mix starts in about 2 seconds and seeks anywhere instantly.
+- **Long mixes start instantly:** YouTube throttles the native player's open-ended requests to about twice real time, which left multi-hour mixes stuck loading. Undertone reads the audio file's segment index and gives the player a playlist of those segments instead, so it fetches only the next few minutes, in ranges YouTube serves at full speed. A two-hour mix starts in well under a second, seeks anywhere instantly, and downloads about 5 MB up front rather than the whole file. Files without an index fall back to fetching in 1 MB ranges.
 - **Recent links:** the last ten things you played, one click to replay.
 - **Volume from the menu bar:** scroll over the icon to change volume; optionally show the track title next to
   the icon.
@@ -112,7 +112,7 @@ Percent-encode the `url` value (`&` becomes `%26`), or the link's own parameters
 1. You paste a link. Undertone classifies it (video / playlist / mix / other site).
 2. It runs `yt-dlp -j` to get the best audio-only stream (AAC in an MP4 container, which the native player can
    play), preferring the fast `visionos` client and falling back to yt-dlp's default clients.
-3. It plays that stream URL directly with `AVPlayer` — audio only, no video layer, no download.
+3. It plays that stream URL with `AVPlayer` — audio only, no video layer, no download. A YouTube stream is played as an HLS playlist built from the file's own segment index, so only the part about to play is fetched.
 4. It publishes the track to macOS so media keys, AirPods, and Control Center work, and it keeps the panel,
    scrubber, and speed in sync.
 
