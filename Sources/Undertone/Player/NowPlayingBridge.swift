@@ -40,12 +40,12 @@ final class NowPlayingBridge {
             return .success
         }
         commands.nextTrackCommand.addTarget { [weak self] _ in
-            guard let self, self.engine.queue?.hasNext == true else { return .noSuchContent }
+            guard let self, self.engine.hasNext else { return .noSuchContent }
             self.engine.next()
             return .success
         }
         commands.previousTrackCommand.addTarget { [weak self] _ in
-            guard let self, self.engine.queue?.hasPrevious == true else { return .noSuchContent }
+            guard let self, self.engine.hasPrevious else { return .noSuchContent }
             self.engine.previous()
             return .success
         }
@@ -62,6 +62,7 @@ final class NowPlayingBridge {
     private func observe() {
         withObservationTracking {
             _ = engine.track
+            _ = engine.chapter
             _ = engine.isPlaying
             _ = engine.isBuffering
             _ = engine.speed
@@ -89,7 +90,8 @@ final class NowPlayingBridge {
             MPNowPlayingInfoPropertyPlaybackRate: (engine.isPlaying && !engine.isBuffering) ? engine.speed.rawValue : 0,
             MPNowPlayingInfoPropertyDefaultPlaybackRate: engine.speed.rawValue,
         ]
-        if let channel = track.channel { info[MPMediaItemPropertyArtist] = channel }
+        // The subtitle line: in a DJ mix, the chapter (the song playing) rather than the channel.
+        if let subtitle = engine.chapter?.title ?? track.channel { info[MPMediaItemPropertyArtist] = subtitle }
         if let duration = engine.duration, duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         if let queue = engine.queue {
             if let title = queue.title { info[MPMediaItemPropertyAlbumTitle] = title }
@@ -103,8 +105,8 @@ final class NowPlayingBridge {
         }
         center.nowPlayingInfo = info
         center.playbackState = engine.isPlaying ? .playing : .paused
-        commands.nextTrackCommand.isEnabled = engine.queue?.hasNext ?? false
-        commands.previousTrackCommand.isEnabled = engine.queue?.hasPrevious ?? false
+        commands.nextTrackCommand.isEnabled = engine.hasNext
+        commands.previousTrackCommand.isEnabled = engine.hasPrevious
     }
 
     private func loadArtwork(for track: Track) {

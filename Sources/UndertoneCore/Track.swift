@@ -16,12 +16,15 @@ public struct Track: Equatable, Sendable, Identifiable, Codable {
     /// From the `expire=` query parameter of the stream URL (YouTube URLs live ~6 h).
     public var expiresAt: Date?
     public var extractor: String?
+    /// In start order; empty for most videos.
+    public var chapters: [Chapter]
 
     public init(
         id: String, title: String, channel: String? = nil, duration: Double? = nil,
         webpageURL: URL? = nil, thumbnailURL: URL? = nil, streamURL: URL,
         streamExtension: String? = nil, audioCodec: String? = nil,
-        httpHeaders: [String: String] = [:], expiresAt: Date? = nil, extractor: String? = nil
+        httpHeaders: [String: String] = [:], expiresAt: Date? = nil, extractor: String? = nil,
+        chapters: [Chapter] = []
     ) {
         self.id = id
         self.title = title
@@ -35,6 +38,25 @@ public struct Track: Equatable, Sendable, Identifiable, Codable {
         self.httpHeaders = httpHeaders
         self.expiresAt = expiresAt
         self.extractor = extractor
+        self.chapters = chapters
+    }
+
+    // Written out so a stream cached before chapters were decoded (no `chapters` key) still loads.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        channel = try c.decodeIfPresent(String.self, forKey: .channel)
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration)
+        webpageURL = try c.decodeIfPresent(URL.self, forKey: .webpageURL)
+        thumbnailURL = try c.decodeIfPresent(URL.self, forKey: .thumbnailURL)
+        streamURL = try c.decode(URL.self, forKey: .streamURL)
+        streamExtension = try c.decodeIfPresent(String.self, forKey: .streamExtension)
+        audioCodec = try c.decodeIfPresent(String.self, forKey: .audioCodec)
+        httpHeaders = try c.decode([String: String].self, forKey: .httpHeaders)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        extractor = try c.decodeIfPresent(String.self, forKey: .extractor)
+        chapters = try c.decodeIfPresent([Chapter].self, forKey: .chapters) ?? []
     }
 
     public var userAgent: String? { httpHeaders["User-Agent"] }
@@ -74,8 +96,18 @@ public struct Track: Equatable, Sendable, Identifiable, Codable {
             audioCodec: info.acodec,
             httpHeaders: (info.httpHeaders ?? [:]).filter { $0.key == "User-Agent" },   // the only one used
             expiresAt: expiry(from: streamURL),
-            extractor: info.extractor
+            extractor: info.extractor,
+            chapters: chapters(from: info.chapters ?? [])
         )
+    }
+
+    /// yt-dlp's chapters in start order. One without a start is dropped; an untitled one gets its number.
+    private static func chapters(from raw: [YTDLPChapter]) -> [Chapter] {
+        let timed = raw.compactMap { c in c.startTime.map { (start: $0, end: c.endTime, title: c.title) } }
+        return timed.sorted { $0.start < $1.start }.enumerated().map { i, c in
+            let title = c.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return Chapter(start: c.start, end: c.end, title: title.isEmpty ? "Chapter \(i + 1)" : title)
+        }
     }
 
     static func expiry(from url: URL) -> Date? {
@@ -100,10 +132,23 @@ private struct YTDLPInfo: Decodable {
     let acodec: String?
     let httpHeaders: [String: String]?
     let extractor: String?
+    let chapters: [YTDLPChapter]?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, channel, uploader, duration, thumbnail, url, ext, acodec, extractor
+        case id, title, channel, uploader, duration, thumbnail, url, ext, acodec, extractor, chapters
         case webpageURL = "webpage_url"
         case httpHeaders = "http_headers"
+    }
+}
+
+private struct YTDLPChapter: Decodable {
+    let startTime: Double?
+    let endTime: Double?
+    let title: String?
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case startTime = "start_time"
+        case endTime = "end_time"
     }
 }

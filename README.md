@@ -28,6 +28,7 @@ Built for macOS 26 (Tahoe) with a real Liquid Glass panel you can tint to any co
   panel, so pressing Play is instant.
 - **Playlists:** paste a playlist link and it plays through, with next/previous. The next track is fetched ahead
   of time so changes are quick.
+- **Chapters:** in a video with YouTube chapters (a DJ mix, say), the panel, the menu bar title, and Now Playing show the chapter playing now. Next/previous skip between chapters, and the chapter menu jumps to any of them.
 - **Media keys & Now Playing:** the F7–F9 keys, AirPod taps, and the Control Center widget control Undertone
   with no setup.
 - **Global shortcuts:** configurable hotkeys for play/pause (`⌃⌥P`), cycle speed (`⌃⌥S`), open the panel
