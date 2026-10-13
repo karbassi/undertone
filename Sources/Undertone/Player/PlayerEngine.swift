@@ -90,6 +90,11 @@ final class PlayerEngine {
     @ObservationIgnored private var failedWarmKeys: [String: Date] = [:]
     /// Feeds the current YouTube item in bounded ranges; held here because AVAssetResourceLoader keeps it weakly.
     @ObservationIgnored private var streamLoader: ChunkedStreamLoader?
+    @ObservationIgnored private var positionObserver: Any?
+    /// True while a freshly loaded item is still seeking to its resume point, so time 0 isn't saved over it.
+    @ObservationIgnored private var isSeekingOnLoad = false
+    /// How often the position is saved while playing (it is also saved on every pause, seek and track change).
+    static let positionSaveInterval: Double = 15
     /// Unavailable playlist entries skipped in a row before giving up (avoids marching through a dead playlist).
     static let maxConsecutiveSkips = 5
     /// Automatic re-resolves (expired URL, failed item) allowed per loaded track before giving up.
@@ -115,6 +120,22 @@ final class PlayerEngine {
                 self.syncPlaybackState()
             }
         }
+
+        // Fires every interval while playing, and also on every seek, play and pause.
+        let interval = CMTime(seconds: Self.positionSaveInterval, preferredTimescale: 1)
+        positionObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.savePosition() }
+        }
+    }
+
+    // MARK: - Resume
+
+    /// Remembers where the current track is, so opening it again picks up there.
+    func savePosition() {
+        guard let track, let key = currentLink?.cacheKey, !isSeekingOnLoad else { return }
+        // A replaced item reports time 0 until it is ready; with no item (idle unload) livePosition is the saved clock.
+        if let item = player.currentItem, item.status != .readyToPlay { return }
+        settings.positions.record(livePosition, duration: track.duration, forKey: key)
     }
 
     // MARK: - Saved links
@@ -175,7 +196,8 @@ final class PlayerEngine {
             openPlaylist(link)
         } else {
             queue = nil
-            resolveAndPlay(link, startAt: link.startTime)
+            // A saved position beats the link's own `t=`: copied YouTube links often carry one by accident.
+            resolveAndPlay(link, startAt: settings.positions[link.cacheKey]?.seconds ?? link.startTime)
         }
     }
 
@@ -314,6 +336,9 @@ final class PlayerEngine {
     }
 
     private func load(_ track: Track, link: MediaLink, startAt: Double?, queueTarget: Int?) {
+        if let current = currentLink, current.cacheKey != link.cacheKey { savePosition() }
+        // An explicit start (a recovery, an idle reload, a `t=`) wins; otherwise pick up where this track was left.
+        let startAt = startAt ?? settings.positions[link.cacheKey]?.seconds
         teardownItem()
         idleUnloadTask?.cancel()
         isIdleUnloaded = false
@@ -333,7 +358,7 @@ final class PlayerEngine {
         isResolving = false
         resolvingTitle = nil
         currentTime = startAt ?? 0
-        log.notice("loaded \(track.title, privacy: .public) [\(track.streamExtension ?? "?", privacy: .public) \(track.audioCodec ?? "?", privacy: .public)] duration \(track.duration ?? -1)")
+        log.notice("loaded \(track.title, privacy: .public) [\(track.streamExtension ?? "?", privacy: .public) \(track.audioCodec ?? "?", privacy: .public)] duration \(track.duration ?? -1) start \(startAt ?? 0)")
 
         let asset: AVURLAsset
         if track.isYouTube {
@@ -357,7 +382,13 @@ final class PlayerEngine {
         observe(item)
         player.replaceCurrentItem(with: item)
         if let startAt, startAt > 0 {
-            player.seek(to: CMTime(seconds: startAt, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .positiveInfinity)
+            isSeekingOnLoad = true
+            player.seek(to: CMTime(seconds: startAt, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .positiveInfinity) { [weak self, weak item] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let item, self.player.currentItem === item else { return }   // a newer load owns the flag
+                    self.isSeekingOnLoad = false
+                }
+            }
         }
         play()
 
@@ -386,6 +417,7 @@ final class PlayerEngine {
         endObserver = nil
         streamLoader?.cancelAll()
         streamLoader = nil
+        isSeekingOnLoad = false
     }
 
     /// Derives the published flags from the player. Called from KVO and from the periodic timer as a safety net.
@@ -450,6 +482,7 @@ final class PlayerEngine {
     /// Releases the AVPlayerItem after a long pause: no buffering, no media pipeline, back to idle memory.
     /// Track, queue and position stay; Play rebuilds it (instant on a cache hit).
     private func unloadForIdle() {
+        savePosition()
         let position = livePosition
         teardownItem()
         player.replaceCurrentItem(with: nil)
@@ -585,6 +618,7 @@ final class PlayerEngine {
     }
 
     func stop() {
+        savePosition()
         resolveTask?.cancel()
         cancelBackgroundResolves()
         pendingQueueTarget = nil
@@ -608,6 +642,8 @@ final class PlayerEngine {
         playerStateTask?.cancel()
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         timeObserver = nil
+        if let positionObserver { player.removeTimeObserver(positionObserver) }
+        positionObserver = nil
     }
 
     func clearError() {
@@ -623,6 +659,7 @@ final class PlayerEngine {
 
     private func trackEnded() {
         log.notice("ended \(self.track?.title ?? "", privacy: .public) repeat=\(self.repeatMode.rawValue, privacy: .public)")
+        if let key = currentLink?.cacheKey { settings.positions.forget(key) }   // finished: next time starts over
         switch repeatMode {
         case .one:
             restartCurrentTrack()
