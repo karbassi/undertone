@@ -27,7 +27,8 @@ jobs:
             exit 1
           fi
           swift --version
-          VERSION="$version" ./scripts/bundle.sh
+          ARCHS="arm64 x86_64" VERSION="$version" ./scripts/bundle.sh
+          lipo -archs build/Undertone.app/Contents/MacOS/Undertone
 
       - name: Create zip
         run: ditto -c -k --sequesterRsrc --keepParent build/Undertone.app Undertone.zip

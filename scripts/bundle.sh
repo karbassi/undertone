@@ -11,11 +11,14 @@ VERSION="${VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 CONFIG="${CONFIG:-release}"
 OUT="build/$APP.app"
+# ARCHS="arm64 x86_64" builds a universal binary (releases do); unset builds for this Mac only.
+ARCH_ARGS=""
+for arch in ${ARCHS:-}; do ARCH_ARGS="$ARCH_ARGS --arch $arch"; done
 
-echo "▸ swift build -c $CONFIG --product $APP"
+echo "▸ swift build -c $CONFIG --product $APP$ARCH_ARGS"
 # Build only the app product: the UndertoneSelfTest target needs -enable-testing, which is debug-only.
-swift build -c "$CONFIG" --product "$APP" 2>&1 | grep -vE '^\s*$' | tail -n 3
-BIN="$(swift build -c "$CONFIG" --product "$APP" --show-bin-path)/$APP"
+swift build -c "$CONFIG" --product "$APP" $ARCH_ARGS 2>&1 | grep -vE '^\s*$' | tail -n 3
+BIN="$(swift build -c "$CONFIG" --product "$APP" $ARCH_ARGS --show-bin-path)/$APP"
 [ -x "$BIN" ] || { echo "binary not found at $BIN" >&2; exit 1; }
 
 echo "▸ assembling $OUT (v$VERSION build $BUILD_NUMBER)"
