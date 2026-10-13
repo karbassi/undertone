@@ -92,7 +92,9 @@ nonisolated final class ChunkedStreamLoader: NSObject, AVAssetResourceLoaderDele
                 while offset < end {
                     try Task.checkCancellation()
                     let chunk = try await fetch(from: offset, through: min(end, offset + Self.chunkSize) - 1)
-                    guard !chunk.isEmpty else { break }
+                    guard !chunk.isEmpty else {
+                        throw URLError(.zeroByteResource, userInfo: [NSLocalizedDescriptionKey: "Stream returned no bytes at offset \(offset)"])
+                    }
                     try Task.checkCancellation()
                     dataRequest.respond(with: chunk)
                     offset += Int64(chunk.count)
