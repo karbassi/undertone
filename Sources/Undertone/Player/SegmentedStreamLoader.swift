@@ -50,7 +50,8 @@ nonisolated final class SegmentedStreamLoader: NSObject, AVAssetResourceLoaderDe
                 switch try SegmentIndex.parse(data) {
                 case .index(let index):
                     // The segments must tile the rest of the file exactly, or the index is not describing this stream.
-                    guard let last = index.segments.last, total == nil || last.end == total else {
+                    // An unknown total (`bytes …/*`) cannot be checked, so it fails too.
+                    guard index.coversFile(ofLength: total) else {
                         log.error("segment index does not cover the stream; using the chunked loader")
                         return nil
                     }

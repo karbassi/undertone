@@ -82,6 +82,19 @@ enum MP4 {
         #expect(index.segments.first?.offset == Int64(file.count))
     }
 
+    @Test func coversOnlyAFileOfKnownMatchingLength() throws {
+        guard case .index(let index) = try parse(MP4.ftyp + MP4.moov + MP4.sidx(references: references)) else {
+            Issue.record("expected an index"); return
+        }
+        let end = try #require(index.segments.last?.end)
+        #expect(index.coversFile(ofLength: end))
+        #expect(!index.coversFile(ofLength: end - 1))
+        #expect(!index.coversFile(ofLength: end + 1))
+        // An unknown length (`Content-Range: bytes 0-1/*`) cannot be checked.
+        #expect(!index.coversFile(ofLength: nil))
+        #expect(!SegmentIndex(initRange: 0..<10, timescale: 1, segments: []).coversFile(ofLength: 10))
+    }
+
     @Test func asksForMoreBytesWhenTheBoxesRunPastTheBuffer() throws {
         let sidx = MP4.sidx(references: references)
         let file = MP4.ftyp + MP4.moov + sidx

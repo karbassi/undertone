@@ -31,6 +31,13 @@ public struct SegmentIndex: Equatable, Sendable {
         self.segments = segments
     }
 
+    /// Whether the segments end exactly at the end of a file `length` bytes long. An unknown length cannot be
+    /// checked, so it fails.
+    public func coversFile(ofLength length: Int64?) -> Bool {
+        guard let length, let last = segments.last else { return false }
+        return last.end == length
+    }
+
     public enum ParseResult: Equatable, Sendable {
         case index(SegmentIndex)
         /// The boxes run past the bytes given: parse again with at least this many leading bytes.
