@@ -133,15 +133,15 @@ final class PlayerEngine {
     /// Remembers where the current track is, so opening it again picks up there.
     /// - Parameter seconds: a known position (a seek target), saved as is; nil reads the player clock.
     func savePosition(at seconds: Double? = nil) {
-        guard let track, let key = currentLink?.cacheKey else { return }
+        guard track != nil, let key = currentLink?.cacheKey else { return }
         if let seconds {
-            settings.positions.record(seconds, duration: track.duration, forKey: key)
+            settings.positions.record(seconds, duration: duration, forKey: key)
             return
         }
         guard !isSeekingOnLoad else { return }
         // A replaced item reports time 0 until it is ready; with no item (idle unload) livePosition is the saved clock.
         if let item = player.currentItem, item.status != .readyToPlay { return }
-        settings.positions.record(livePosition, duration: track.duration, forKey: key)
+        settings.positions.record(livePosition, duration: duration, forKey: key)
     }
 
     // MARK: - Saved links
