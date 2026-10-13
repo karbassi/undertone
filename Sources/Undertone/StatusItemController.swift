@@ -83,8 +83,8 @@ final class StatusItemController: NSObject {
         playPause.target = self
         playPause.isEnabled = engine.track != nil || settings.lastLink != nil
         menu.addItem(playPause)
-        if engine.queue?.hasNext == true {
-            let next = NSMenuItem(title: "Next", action: #selector(nextTrack), keyEquivalent: "")
+        if engine.hasNext {
+            let next = NSMenuItem(title: engine.skipsByChapter ? "Next Chapter" : "Next", action: #selector(nextTrack), keyEquivalent: "")
             next.target = self
             menu.addItem(next)
         }
@@ -108,6 +108,7 @@ final class StatusItemController: NSObject {
             _ = engine.isPlaying
             _ = engine.isResolving
             _ = engine.track
+            _ = engine.chapter
             _ = settings.showTitleInMenuBar
         } onChange: { [weak self] in
             Task { @MainActor in
@@ -136,7 +137,8 @@ final class StatusItemController: NSObject {
         if let flashText {
             title = flashText
         } else if settings.showTitleInMenuBar, let track = engine.track {
-            title = Self.truncated(track.title, to: 30)
+            // In a DJ mix the chapter is the song playing, which says more than the mix's title.
+            title = Self.truncated(engine.chapter?.title ?? track.title, to: 30)
         }
         // Setting these unconditionally relayouts the whole menu bar; only touch them on a real change.
         let newTitle = title.isEmpty ? "" : " " + title
