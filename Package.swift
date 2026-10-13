@@ -46,7 +46,7 @@ let package = Package(
                 .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
             ]
         ),
-        // `make test` runs this. It calls Swift Testing's own entry point, which `swift test` will not do
+        // `mise run test` runs this. It calls Swift Testing's own entry point, which `swift test` will not do
         // under the Command Line Tools. Runs every @Test in the target; honours flags like `--filter`.
         .executableTarget(
             name: "UndertoneSelfTest",

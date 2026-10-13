@@ -1,0 +1,51 @@
+[tasks.build]
+description = "Build build/Undertone.app (release, ad-hoc signed)"
+run = "./scripts/bundle.sh"
+
+[tasks.run]
+description = "Build, then launch the app from build/"
+depends = ["build"]
+run = "pkill -x Undertone || true; /usr/bin/open build/Undertone.app"
+
+[tasks.dev]
+description = "Build, then run in the foreground with logs in this terminal (Ctrl-C to stop)"
+depends = ["build"]
+run = "pkill -x Undertone || true; build/Undertone.app/Contents/MacOS/Undertone"
+
+[tasks.install]
+description = "Build, copy to /Applications, and launch it from there"
+depends = ["build"]
+run = """
+pkill -x Undertone || true
+rm -rf /Applications/Undertone.app
+cp -R build/Undertone.app /Applications/Undertone.app
+/usr/bin/open /Applications/Undertone.app
+echo "✓ installed /Applications/Undertone.app"
+"""
+
+[tasks.uninstall]
+description = "Quit and remove /Applications/Undertone.app (settings stay in ~/Library/Preferences)"
+run = """
+pkill -x Undertone || true
+rm -rf /Applications/Undertone.app
+echo "✓ removed /Applications/Undertone.app"
+"""
+
+# The self-test links Swift Testing from whichever developer dir is selected: full Xcode keeps it under the
+# platform's Developer folder, so point dyld there (the Command Line Tools case is handled by rpaths in Package.swift).
+# Extra arguments go to the test runner: `mise run test -- --filter LinkParser`.
+[tasks.test]
+description = "Run the UndertoneCore unit tests (Swift Testing via a self-test executable)"
+run = 'swift build --product UndertoneSelfTest && XP="$(xcode-select -p)" && DYLD_FRAMEWORK_PATH="$XP/Platforms/MacOSX.platform/Developer/Library/Frameworks" DYLD_LIBRARY_PATH="$XP/Platforms/MacOSX.platform/Developer/usr/lib" "$(swift build --product UndertoneSelfTest --show-bin-path)/UndertoneSelfTest"'
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = "rm -rf .build build"
+
+[tasks.doctor]
+description = "Read-only check of yt-dlp, deno and the build (changes nothing)"
+run = "./scripts/doctor.sh"
+
+[tasks.icon]
+description = "Regenerate Resources/AppIcon.icns from scripts/make-icon.swift"
+run = "swift scripts/make-icon.swift Resources/AppIcon.icns"
