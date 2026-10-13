@@ -22,8 +22,15 @@ public struct PlaybackPositions: Equatable, Sendable {
 
     public private(set) var entries: [String: SavedPosition]
 
+    /// Keeps only the newest `limit` entries, so an oversized dictionary or saved payload starts within the cap
+    /// that `record` then maintains.
     public init(entries: [String: SavedPosition] = [:]) {
-        self.entries = entries
+        guard entries.count > Self.limit else {
+            self.entries = entries
+            return
+        }
+        let newest = entries.sorted { $0.value.updatedAt > $1.value.updatedAt }.prefix(Self.limit)
+        self.entries = Dictionary(uniqueKeysWithValues: newest.map { ($0.key, $0.value) })
     }
 
     public init(decoding data: Data) {
@@ -40,16 +47,22 @@ public struct PlaybackPositions: Equatable, Sendable {
 
     public subscript(key: String) -> SavedPosition? { entries[key] }
 
+    /// Where to start `key`: a saved position beats the link's own `t=`, since copied links often carry one by accident.
+    public func start(forKey key: String, linkStart: Double?) -> Double? {
+        entries[key]?.seconds ?? linkStart
+    }
+
     /// The saved position for a pasted or stored link, if any.
     public func position(for url: URL) -> SavedPosition? {
         LinkParser.parse(url.absoluteString).flatMap { entries[$0.cacheKey] }
     }
 
     /// Remembers `seconds` into a track of `duration`. Near the start or the end it forgets the track
-    /// instead, so a finished mix starts over and one barely begun isn't worth resuming.
+    /// instead, so a finished mix starts over and one barely begun isn't worth resuming. A track now
+    /// shorter than `minimumDuration` (a video trimmed since) is forgotten too.
     public mutating func record(_ seconds: Double, duration: Double?, forKey key: String, at date: Date = Date()) {
-        guard let duration, duration >= Self.minimumDuration, seconds.isFinite else { return }
-        guard seconds >= Self.edgeMargin, seconds <= duration - Self.edgeMargin else {
+        guard let duration, seconds.isFinite else { return }
+        guard duration >= Self.minimumDuration, seconds >= Self.edgeMargin, seconds <= duration - Self.edgeMargin else {
             entries[key] = nil
             return
         }
