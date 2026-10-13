@@ -121,7 +121,7 @@ final class PlayerEngine {
             }
         }
 
-        // Fires every interval while playing, and also on every seek, play and pause.
+        // Fires every interval while playing; pause and seek save explicitly.
         let interval = CMTime(seconds: Self.positionSaveInterval, preferredTimescale: 1)
         positionObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.savePosition() }
@@ -131,8 +131,14 @@ final class PlayerEngine {
     // MARK: - Resume
 
     /// Remembers where the current track is, so opening it again picks up there.
-    func savePosition() {
-        guard let track, let key = currentLink?.cacheKey, !isSeekingOnLoad else { return }
+    /// - Parameter seconds: a known position (a seek target), saved as is; nil reads the player clock.
+    func savePosition(at seconds: Double? = nil) {
+        guard let track, let key = currentLink?.cacheKey else { return }
+        if let seconds {
+            settings.positions.record(seconds, duration: track.duration, forKey: key)
+            return
+        }
+        guard !isSeekingOnLoad else { return }
         // A replaced item reports time 0 until it is ready; with no item (idle unload) livePosition is the saved clock.
         if let item = player.currentItem, item.status != .readyToPlay { return }
         settings.positions.record(livePosition, duration: track.duration, forKey: key)
@@ -529,6 +535,7 @@ final class PlayerEngine {
 
     func pause() {
         player.pause()
+        savePosition()
         scheduleStateSync()
     }
 
@@ -573,6 +580,7 @@ final class PlayerEngine {
         let upper = (duration ?? .infinity) - 0.25
         let target = max(0, min(seconds, upper))
         currentTime = target
+        savePosition(at: target)
         hasEnded = false
         if !isIdleUnloaded {
             player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
