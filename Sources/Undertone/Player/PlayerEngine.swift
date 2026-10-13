@@ -91,8 +91,10 @@ final class PlayerEngine {
     /// Feeds the current YouTube item in bounded ranges; held here because AVAssetResourceLoader keeps it weakly.
     @ObservationIgnored private var streamLoader: ChunkedStreamLoader?
     @ObservationIgnored private var positionObserver: Any?
-    /// Where a freshly loaded item is seeking to; until that seek lands the player clock reads 0, so this stands in for it.
-    @ObservationIgnored private var loadSeekTarget: Double?
+    /// Where an in-flight seek (the resume seek on load, or a user seek) is heading; until it lands the player clock
+    /// still reads the old time (or 0), so this stands in for it.
+    @ObservationIgnored private var pendingSeekTarget: Double?
+    @ObservationIgnored private var seekCount = 0
     /// How often the position is saved while playing (it is also saved on every pause, seek and track change).
     static let positionSaveInterval: Double = 15
     /// Unavailable playlist entries skipped in a row before giving up (avoids marching through a dead playlist).
@@ -131,17 +133,30 @@ final class PlayerEngine {
     // MARK: - Resume
 
     /// Remembers where the current track is, so opening it again picks up there.
-    /// - Parameter seconds: a known position (a seek target), saved as is; nil uses the pending resume-seek
+    /// - Parameter seconds: a known position (a seek target), saved as is; nil uses the pending seek's
     ///   target, or else the player clock.
     func savePosition(at seconds: Double? = nil) {
         guard track != nil, let key = currentLink?.cacheKey else { return }
-        if let position = seconds ?? loadSeekTarget {
+        if let position = seconds ?? pendingSeekTarget {
             settings.positions.record(position, duration: duration, forKey: key)
             return
         }
         // A replaced item reports time 0 until it is ready; with no item (idle unload) livePosition is the saved clock.
         if let item = player.currentItem, item.status != .readyToPlay { return }
         settings.positions.record(livePosition, duration: duration, forKey: key)
+    }
+
+    /// Seeks the player, keeping `target` as the position to save until this seek lands or a newer one replaces it.
+    private func seekPlayer(to target: Double, toleranceAfter: CMTime) {
+        seekCount += 1
+        let id = seekCount
+        pendingSeekTarget = target
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: toleranceAfter) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.seekCount == id else { return }   // a newer seek owns the target
+                self.pendingSeekTarget = nil
+            }
+        }
     }
 
     // MARK: - Saved links
@@ -388,15 +403,7 @@ final class PlayerEngine {
         }
         observe(item)
         player.replaceCurrentItem(with: item)
-        if let startAt, startAt > 0 {
-            loadSeekTarget = startAt
-            player.seek(to: CMTime(seconds: startAt, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .positiveInfinity) { [weak self, weak item] _ in
-                MainActor.assumeIsolated {
-                    guard let self, let item, self.player.currentItem === item else { return }   // a newer load owns the target
-                    self.loadSeekTarget = nil
-                }
-            }
-        }
+        if let startAt, startAt > 0 { seekPlayer(to: startAt, toleranceAfter: .positiveInfinity) }
         play()
 
         if queue == nil, let pastedLink {
@@ -424,7 +431,7 @@ final class PlayerEngine {
         endObserver = nil
         streamLoader?.cancelAll()
         streamLoader = nil
-        loadSeekTarget = nil
+        pendingSeekTarget = nil
     }
 
     /// Derives the published flags from the player. Called from KVO and from the periodic timer as a safety net.
@@ -581,12 +588,9 @@ final class PlayerEngine {
         let upper = (duration ?? .infinity) - 0.25
         let target = max(0, min(seconds, upper))
         currentTime = target
-        loadSeekTarget = nil   // a user seek supersedes the resume seek
         savePosition(at: target)
         hasEnded = false
-        if !isIdleUnloaded {
-            player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-        }
+        if !isIdleUnloaded { seekPlayer(to: target, toleranceAfter: .zero) }
         seekGeneration += 1
     }
 
