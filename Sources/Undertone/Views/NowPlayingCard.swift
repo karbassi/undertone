@@ -29,6 +29,12 @@ struct NowPlayingCard: View {
                     Text(track.title)
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(2)
+                    if let chapter = engine.chapter {
+                        Text(chapter.title)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                            .help(chapter.title)
+                    }
                     if let channel = track.channel {
                         Text(channel)
                             .font(.caption)
@@ -45,6 +51,9 @@ struct NowPlayingCard: View {
             }
             Spacer(minLength: 0)
             if engine.track != nil, !engine.isResolving {
+                if engine.track?.chapters.isEmpty == false {
+                    ChapterMenu()
+                }
                 Button { engine.toggleSavedTrack() } label: {
                     Image(systemName: engine.isTrackSaved ? "star.fill" : "star")
                         .font(.system(size: 14))
@@ -56,6 +65,32 @@ struct NowPlayingCard: View {
                 .help(engine.isTrackSaved ? "Remove this track from saved links" : "Save this track")
             }
         }
+    }
+}
+
+/// Every chapter of the playing video with its start time; pick one to jump there. The current one is checked.
+struct ChapterMenu: View {
+    @Environment(PlayerEngine.self) private var engine
+
+    var body: some View {
+        Menu {
+            ForEach(Array((engine.track?.chapters ?? []).enumerated()), id: \.offset) { _, chapter in
+                Toggle(isOn: Binding(get: { chapter == engine.chapter }, set: { _ in engine.seek(to: chapter.start) })) {
+                    Text(chapter.title)
+                    Text(TimeFormat.clock(chapter.start))
+                }
+            }
+        } label: {
+            Image(systemName: "list.bullet")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Chapters")
     }
 }
 

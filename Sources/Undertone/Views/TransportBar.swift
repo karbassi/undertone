@@ -6,9 +6,9 @@ struct TransportBar: View {
 
     var body: some View {
         HStack(spacing: 22) {
-            if engine.queue != nil {
-                TransportButton(symbol: "backward.end.fill", size: 15, help: "Previous") { engine.previous() }
-                    .disabled(engine.queue?.hasPrevious != true && engine.currentTime < 3)
+            if engine.queue != nil || engine.skipsByChapter {
+                TransportButton(symbol: "backward.end.fill", size: 15, help: engine.skipsByChapter ? "Previous chapter" : "Previous") { engine.previous() }
+                    .disabled(!engine.hasPrevious && engine.currentTime < 3)
             }
             TransportButton(symbol: "gobackward.15", size: 19, help: "Back 15 seconds") { engine.skip(by: -15) }
             Button {
@@ -24,9 +24,9 @@ struct TransportBar: View {
             .buttonStyle(.plain)
             .help(engine.isPlaying ? "Pause" : "Play")
             TransportButton(symbol: "goforward.15", size: 19, help: "Forward 15 seconds") { engine.skip(by: 15) }
-            if engine.queue != nil {
-                TransportButton(symbol: "forward.end.fill", size: 15, help: "Next") { engine.next() }
-                    .disabled(engine.queue?.hasNext != true)
+            if engine.queue != nil || engine.skipsByChapter {
+                TransportButton(symbol: "forward.end.fill", size: 15, help: engine.skipsByChapter ? "Next chapter" : "Next") { engine.next() }
+                    .disabled(!engine.hasNext)
             }
         }
         .frame(maxWidth: .infinity)
