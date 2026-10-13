@@ -32,6 +32,7 @@ Built for macOS 26 (Tahoe) with a real Liquid Glass panel you can tint to any co
   with no setup.
 - **Global shortcuts:** configurable hotkeys for play/pause (`⌃⌥P`), cycle speed (`⌃⌥S`), open the panel
   (`⌃⌥Y`), and next/previous (`⌃⌥→` / `⌃⌥←`).
+- **Long mixes start instantly:** YouTube throttles the native player's open-ended requests to about twice real time, which left multi-hour mixes stuck loading. Undertone fetches YouTube audio in 1 MB ranges instead, so a two-hour mix starts in about 2 seconds and seeks anywhere instantly.
 - **Recent links:** the last ten things you played, one click to replay.
 - **Volume from the menu bar:** scroll over the icon to change volume; optionally show the track title next to
   the icon.

@@ -88,6 +88,8 @@ final class PlayerEngine {
     @ObservationIgnored private var persistVolumeTask: Task<Void, Never>?
     @ObservationIgnored private var stateSyncTask: Task<Void, Never>?
     @ObservationIgnored private var failedWarmKeys: [String: Date] = [:]
+    /// Feeds the current YouTube item in bounded ranges; held here because AVAssetResourceLoader keeps it weakly.
+    @ObservationIgnored private var streamLoader: ChunkedStreamLoader?
     /// Unavailable playlist entries skipped in a row before giving up (avoids marching through a dead playlist).
     static let maxConsecutiveSkips = 5
     /// Automatic re-resolves (expired URL, failed item) allowed per loaded track before giving up.
@@ -333,9 +335,18 @@ final class PlayerEngine {
         currentTime = startAt ?? 0
         log.notice("loaded \(track.title, privacy: .public) [\(track.streamExtension ?? "?", privacy: .public) \(track.audioCodec ?? "?", privacy: .public)] duration \(track.duration ?? -1)")
 
-        var options: [String: Any] = [:]
-        if let userAgent = track.userAgent { options[AVURLAssetHTTPUserAgentKey] = userAgent }
-        let asset = AVURLAsset(url: track.streamURL, options: options)
+        let asset: AVURLAsset
+        if track.isYouTube {
+            // YouTube throttles AVPlayer's open-ended range requests; a long mix would never start.
+            let loader = ChunkedStreamLoader(streamURL: track.streamURL, headers: track.httpHeaders, fileExtension: track.streamExtension)
+            asset = AVURLAsset(url: loader.assetURL)
+            asset.resourceLoader.setDelegate(loader, queue: loader.queue)
+            streamLoader = loader
+        } else {
+            var options: [String: Any] = [:]
+            if let userAgent = track.userAgent { options[AVURLAssetHTTPUserAgentKey] = userAgent }
+            asset = AVURLAsset(url: track.streamURL, options: options)
+        }
         let item = AVPlayerItem(asset: asset)
         // Measured on an M1: the pitch algorithm makes no CPU difference at 2× (spectral 4.5% vs timeDomain
         // 4.4% of one core; decoding twice the samples dominates), so keep the higher-quality one.
@@ -373,6 +384,8 @@ final class PlayerEngine {
         itemStatusTask = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         endObserver = nil
+        streamLoader?.cancelAll()
+        streamLoader = nil
     }
 
     /// Derives the published flags from the player. Called from KVO and from the periodic timer as a safety net.
