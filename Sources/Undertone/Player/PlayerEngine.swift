@@ -279,15 +279,14 @@ final class PlayerEngine {
         pendingQueueTarget = queueTarget
 
         let cached = settings.streamCache.track(forKey: key)
-        if cached != nil {
-            log.notice("cache hit \(key, privacy: .public)")
+        if cached != nil { log.notice("cache hit \(key, privacy: .public)") }
+        // A cache hit still waits on the network for its segment index, so it resolves visibly too: Cancel shows,
+        // and Play with nothing loaded does not restart it.
+        isResolving = true
+        if let queueTarget, let q = queue, q.entries.indices.contains(queueTarget) {
+            resolvingTitle = q.entries[queueTarget].title
         } else {
-            isResolving = true
-            if let queueTarget, let q = queue, q.entries.indices.contains(queueTarget) {
-                resolvingTitle = q.entries[queueTarget].title
-            } else {
-                resolvingTitle = queue?.current?.title ?? "Resolving…"
-            }
+            resolvingTitle = cached?.title ?? queue?.current?.title ?? "Resolving…"
         }
         let inFlight = cached == nil ? backgroundResolves[key] : nil
         resolveTask = Task { [weak self] in
