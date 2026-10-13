@@ -56,6 +56,7 @@ final class AppSettings {
         static let ytdlpCachedVersion = "ytdlpCachedVersion"
         static let ytdlpProbedAt = "ytdlpProbedAt"
         static let idleUnloadSeconds = "idleUnloadSeconds"
+        static let positions = "playbackPositions"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -82,6 +83,7 @@ final class AppSettings {
         ytdlpCachedVersion = defaults.string(forKey: Keys.ytdlpCachedVersion)
         ytdlpProbedAt = defaults.object(forKey: Keys.ytdlpProbedAt) as? Date
         idleUnloadSeconds = defaults.object(forKey: Keys.idleUnloadSeconds) as? Double ?? 10 * 60
+        positions = PlaybackPositions(decoding: defaults.data(forKey: Keys.positions) ?? Data())
     }
 
     /// The look Undertone ships with: the Blue preset at medium intensity on regular Liquid Glass.
@@ -129,6 +131,20 @@ final class AppSettings {
     var saved: SavedLinksStore {
         didSet { defaults.set((try? saved.encoded()) ?? Data(), forKey: Keys.saved) }
     }
+    /// Where each long track (a mix) was left. Written on pause, seek, track change, quit, and every
+    /// `PlayerEngine.positionSaveInterval` while playing.
+    var positions: PlaybackPositions {
+        didSet {
+            guard positions != oldValue else { return }
+            defaults.set((try? positions.encoded()) ?? Data(), forKey: Keys.positions)
+        }
+    }
+
+    /// "Resume at 47:12 of 1:58:35" for a link whose mix was left partway; shown as a menu subtitle.
+    func resumeLabel(for url: URL) -> String? {
+        positions.position(for: url).map { "Resume at \(TimeFormat.clock($0.seconds)) of \(TimeFormat.clock($0.duration))" }
+    }
+
     var ytdlpPathOverride: String? {
         didSet { defaults.set(ytdlpPathOverride, forKey: Keys.ytdlpPath) }
     }

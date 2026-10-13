@@ -82,6 +82,7 @@ struct RecentLinksMenu: View {
                     engine.open(item.url.absoluteString)
                 } label: {
                     Text(item.title)
+                    if let resume = settings.resumeLabel(for: item.url) { Text(resume) }
                 }
             }
             if !settings.recent.items.isEmpty {
@@ -120,6 +121,7 @@ struct SavedLinksMenu: View {
                     engine.open(item.url.absoluteString)
                 } label: {
                     Text(item.title)
+                    if let resume = settings.resumeLabel(for: item.url) { Text(resume) }
                 }
                 .modifierKeyAlternate(.option) {
                     Button("Remove \u{201C}\(item.title)\u{201D}") { settings.saved.remove(item.url) }
