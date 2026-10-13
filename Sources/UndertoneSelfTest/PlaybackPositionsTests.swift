@@ -59,4 +59,23 @@ import Testing
         #expect(store["v0"] == nil)
         #expect(store["v\(PlaybackPositions.limit)"] != nil)
     }
+
+    @Test func trimsAnOversizedStoreToTheNewest() throws {
+        let limit = PlaybackPositions.limit
+        var oversized: [String: SavedPosition] = [:]
+        for i in 0..<(limit + 5) {
+            oversized["v\(i)"] = SavedPosition(seconds: 1000, duration: mix, updatedAt: Date(timeIntervalSince1970: Double(i)))
+        }
+
+        let store = PlaybackPositions(entries: oversized)
+        #expect(store.entries.count == limit)
+        for i in 0..<5 { #expect(store["v\(i)"] == nil) }
+        #expect(store["v\(limit + 4)"] != nil)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoded = PlaybackPositions(decoding: try encoder.encode(oversized))
+        #expect(decoded.entries.count == limit)
+        #expect(decoded["v0"] == nil)
+    }
 }

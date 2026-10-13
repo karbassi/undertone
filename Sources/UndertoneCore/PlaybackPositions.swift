@@ -22,8 +22,15 @@ public struct PlaybackPositions: Equatable, Sendable {
 
     public private(set) var entries: [String: SavedPosition]
 
+    /// Keeps only the newest `limit` entries, so an oversized dictionary or saved payload starts within the cap
+    /// that `record` then maintains.
     public init(entries: [String: SavedPosition] = [:]) {
-        self.entries = entries
+        guard entries.count > Self.limit else {
+            self.entries = entries
+            return
+        }
+        let newest = entries.sorted { $0.value.updatedAt > $1.value.updatedAt }.prefix(Self.limit)
+        self.entries = Dictionary(uniqueKeysWithValues: newest.map { ($0.key, $0.value) })
     }
 
     public init(decoding data: Data) {
