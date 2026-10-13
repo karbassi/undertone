@@ -84,7 +84,7 @@ struct SettingsView: View {
                         }
                     }
                 if !LaunchAtLogin.isAvailable {
-                    Text("Run the built app (make install) to enable this.").font(.caption2).foregroundStyle(.tertiary)
+                    Text("Run the built app (mise run install) to enable this.").font(.caption2).foregroundStyle(.tertiary)
                 } else if !LaunchAtLogin.isInApplications {
                     Text("Tip: install to /Applications first so the login item survives rebuilds.").font(.caption2).foregroundStyle(.tertiary)
                 }

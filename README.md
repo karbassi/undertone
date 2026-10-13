@@ -58,30 +58,31 @@ Built for macOS 26 (Tahoe) with a real Liquid Glass panel you can tint to any co
   Undertone finds yt-dlp on the usual Homebrew paths automatically and tells you in the panel if it is missing
   or out of date. You can also point it at a specific binary in Settings.
 
-Building needs only the **Command Line Tools** (`xcode-select --install`) — no full Xcode.
+Building needs the **Command Line Tools** (`xcode-select --install`) or Xcode, plus **[mise](https://mise.jdx.dev)** to run the tasks (`brew install mise`).
 
 ## Install
 
 ```sh
-git clone https://github.com/JoaoCVerissimo/undertone.git
+git clone https://github.com/karbassi/undertone.git
 cd undertone
-make install      # builds a release .app and copies it to /Applications, then launches it
+mise trust
+mise run install  # builds a release .app and copies it to /Applications, then launches it
 ```
 
-Other targets:
+Other tasks (`mise tasks` lists them):
 
 | Command | What it does |
 |---|---|
-| `make build` | Build `build/Undertone.app` (ad-hoc signed) without installing. |
-| `make run` | Build and launch from `build/`. |
-| `make dev` | Build and run in the foreground with logs in the terminal. |
-| `make test` | Run the unit tests. |
-| `make doctor` | Read-only check of yt-dlp, deno, and the build. Changes nothing. |
-| `make icon` | Regenerate the app icon. |
-| `make uninstall` | Quit and remove `/Applications/Undertone.app`. |
+| `mise run build` | Build `build/Undertone.app` (ad-hoc signed) without installing. |
+| `mise run run` | Build and launch from `build/`. |
+| `mise run dev` | Build and run in the foreground with logs in the terminal. |
+| `mise run test` | Run the unit tests. |
+| `mise run doctor` | Read-only check of yt-dlp, deno, and the build. Changes nothing. |
+| `mise run icon` | Regenerate the app icon. |
+| `mise run clean` | Remove build artifacts. |
+| `mise run uninstall` | Quit and remove `/Applications/Undertone.app`. |
 
-To launch it at login, install to `/Applications` (as `make install` does) and turn on **Launch at login** in
-Settings.
+To launch it at login, install to `/Applications` (as `mise run install` does) and turn on **Launch at login** in Settings.
 
 ## Using it
 
@@ -174,20 +175,18 @@ scripts/make-icon.swift  Renders the app icon.
 ### Testing
 
 Tests live in `Sources/UndertoneSelfTest` and use [Swift Testing](https://developer.apple.com/documentation/testing).
-They run as a small executable rather than through `swift test`, because `swift test` does not execute Swift
-Testing suites when only the Command Line Tools are installed. `make test` runs them; pass-through flags work,
-e.g. `swift run UndertoneSelfTest --filter LinkParser`.
+They run as a small executable rather than through `swift test`, because `swift test` does not execute Swift Testing suites when only the Command Line Tools are installed. `mise run test` runs them with either the Command Line Tools or full Xcode; pass-through flags work, e.g. `mise run test -- --filter LinkParser`.
 
 ## Troubleshooting
 
 - **"yt-dlp isn't installed" / playback fails immediately.** Run `brew install yt-dlp deno`, then Recheck in the
-  panel. Run `make doctor` to see what Undertone sees.
+  panel. Run `mise run doctor` to see what Undertone sees.
 - **A 403, or "requested format is not available".** yt-dlp is behind YouTube. `brew upgrade yt-dlp`.
 - **A specific video won't play** but others do. It may be private, age-restricted, members-only, or region-
   blocked. Undertone will say which.
 - **A Mix plays only one video.** YouTube generates Mixes only for some videos (mostly music). Without one,
   Undertone says so and plays the video.
-- **Launch at login is greyed out.** Run the built app (`make install`), not a bare `swift run` build.
+- **Launch at login is greyed out.** Run the built app (`mise run install`), not a bare `swift run` build.
 
 ## Notes
 
