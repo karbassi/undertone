@@ -38,7 +38,8 @@ public struct SegmentIndex: Equatable, Sendable {
     }
 
     public enum ParseError: Error, Equatable, Sendable {
-        /// A box that cannot be right: smaller than its own header, or a `sidx` shorter than its entries.
+        /// A box that cannot be right: smaller than its own header, a `sidx` shorter than its entries, or offsets
+        /// past the largest `Int64`.
         case malformed
         /// Media (`moof`/`mdat`) or a box running to the end of the file came before any `sidx`.
         case noIndex
@@ -53,6 +54,7 @@ public struct SegmentIndex: Equatable, Sendable {
         var offset: Int64 = 0
         var moovEnd: Int64?
         while true {
+            guard offset <= Int64.max - 8 else { throw ParseError.malformed }
             guard bytes.count >= offset + 8 else { return .needsBytes(offset + 8) }
             var size = Int64(bytes.uint(at: offset, width: 4))
             let type = bytes.fourCC(at: offset + 4)
@@ -120,6 +122,7 @@ public struct SegmentIndex: Equatable, Sendable {
             let reference = bytes.uint(at: p, width: 4)
             guard reference & 0x8000_0000 == 0 else { throw ParseError.unsupported }   // points at another `sidx`
             let size = Int64(reference & 0x7FFF_FFFF)
+            guard offset <= Int64.max - size else { throw ParseError.malformed }
             let ticks = bytes.uint(at: p + 4, width: 4)
             segments.append(Segment(offset: offset, size: size, duration: Double(ticks) / Double(timescale)))
             offset += size

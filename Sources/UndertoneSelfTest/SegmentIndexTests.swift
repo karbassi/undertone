@@ -132,6 +132,12 @@ enum MP4 {
         #expect(throws: SegmentIndex.ParseError.malformed) { try parse(MP4.ftyp + MP4.be(4, 4) + Array("free".utf8)) }
         // A largesize that does not fit in Int64.
         #expect(throws: SegmentIndex.ParseError.malformed) { try parse(MP4.be(1, 4) + Array("free".utf8) + MP4.be(UInt64.max, 8)) }
+        // A box that ends at the largest representable offset.
+        #expect(throws: SegmentIndex.ParseError.malformed) { try parse(MP4.be(1, 4) + Array("free".utf8) + MP4.be(UInt64(Int64.max), 8)) }
+        // Segments that run past the largest representable offset.
+        let sidxEnd = UInt64(MP4.ftyp.count + MP4.moov.count + MP4.sidx(version: 1, references: references).count)
+        let far = MP4.sidx(version: 1, firstOffset: UInt64(Int64.max) - sidxEnd, references: references)
+        #expect(throws: SegmentIndex.ParseError.malformed) { try parse(MP4.ftyp + MP4.moov + far) }
         // No timescale, no references, or more references than the box holds.
         #expect(throws: SegmentIndex.ParseError.malformed) { try parse(MP4.ftyp + MP4.moov + MP4.sidx(timescale: 0, references: references)) }
         #expect(throws: SegmentIndex.ParseError.malformed) { try parse(MP4.ftyp + MP4.moov + MP4.sidx(references: [])) }
