@@ -16,6 +16,8 @@ final class PlayerEngine {
     private(set) var isBuffering = false
     private(set) var hasEnded = false
     private(set) var currentTime: Double = 0
+    /// The chapter playing now (a DJ mix's current track). Kept fresh even while the panel is hidden, without a timer.
+    private(set) var chapter: Chapter?
     /// Bumped on every seek so observers (Now Playing) resync their elapsed time.
     private(set) var seekGeneration = 0
     private(set) var speed: PlaybackSpeed
@@ -95,6 +97,8 @@ final class PlayerEngine {
     /// still reads the old time (or 0), so this stands in for it.
     @ObservationIgnored private var pendingSeekTarget: Double?
     @ObservationIgnored private var seekCount = 0
+    /// Fires at each chapter start of the loaded item.
+    @ObservationIgnored private var chapterObserver: Any?
     /// How often the position is saved while playing (it is also saved on every pause, seek and track change).
     static let positionSaveInterval: Double = 15
     /// Unavailable playlist entries skipped in a row before giving up (avoids marching through a dead playlist).
@@ -422,6 +426,7 @@ final class PlayerEngine {
         endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.trackEnded() }
         }
+        observeChapters()
     }
 
     private func teardownItem() {
@@ -432,6 +437,8 @@ final class PlayerEngine {
         streamLoader?.cancelAll()
         streamLoader = nil
         pendingSeekTarget = nil
+        if let chapterObserver { player.removeTimeObserver(chapterObserver) }
+        chapterObserver = nil
     }
 
     /// Derives the published flags from the player. Called from KVO and from the periodic timer as a safety net.
@@ -505,6 +512,40 @@ final class PlayerEngine {
         log.notice("idle: released the player item after a long pause at \(Int(position))s")
     }
 
+    // MARK: - Chapters
+
+    /// Next and Previous step through chapters when a single video (no playlist queue) has them.
+    var skipsByChapter: Bool { queue == nil && track?.chapters.isEmpty == false }
+
+    /// Whether Next goes anywhere: the next playlist entry, or the next chapter.
+    var hasNext: Bool { queue?.hasNext ?? (skipsByChapter && chapter != track?.chapters.last) }
+
+    /// Whether Previous has an earlier playlist entry or chapter to go to (it can always restart the current one).
+    var hasPrevious: Bool { queue?.hasPrevious ?? skipsByChapter }
+
+    /// Where playback is heading: an in-flight seek's target (so a second Next goes one further), else the player clock.
+    private var targetPosition: Double { pendingSeekTarget ?? livePosition }
+
+    /// Follows the item being loaded from where `load` put `currentTime`. A boundary observer at each chapter start
+    /// keeps `chapter` current during playback, so nothing ticks in between; seeks update it themselves.
+    private func observeChapters() {
+        updateChapter(at: currentTime)
+        let starts = track?.chapters.map(\.start).filter { $0 > 0 } ?? []
+        guard !starts.isEmpty else { return }
+        let times = starts.map { NSValue(time: CMTime(seconds: $0, preferredTimescale: 600)) }
+        chapterObserver = player.addBoundaryTimeObserver(forTimes: times, queue: .main) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.updateChapter(at: self.livePosition)
+            }
+        }
+    }
+
+    private func updateChapter(at seconds: Double) {
+        let current = track?.chapter(at: seconds)
+        if current != chapter { chapter = current }
+    }
+
     // MARK: - Transport
 
     func play() {
@@ -534,6 +575,7 @@ final class PlayerEngine {
         if hasEnded {
             hasEnded = false
             currentTime = 0
+            updateChapter(at: 0)
             player.seek(to: .zero)
         }
         player.defaultRate = Float(speed.rawValue)
@@ -588,6 +630,7 @@ final class PlayerEngine {
         let upper = (duration ?? .infinity) - 0.25
         let target = max(0, min(seconds, upper))
         currentTime = target
+        updateChapter(at: target)
         savePosition(at: target)
         hasEnded = false
         if !isIdleUnloaded { seekPlayer(to: target, toleranceAfter: .zero) }
@@ -599,7 +642,10 @@ final class PlayerEngine {
     }
 
     func next() {
-        guard let q = queue else { return }
+        guard let q = queue else {
+            if let start = track?.nextChapterStart(after: targetPosition) { seek(to: start) }
+            return
+        }
         // Step from the entry we are heading for, so Next after a failed or still-resolving entry moves on.
         let target = (pendingQueueTarget ?? q.index) + 1
         guard q.entries.indices.contains(target) else { return }
@@ -608,7 +654,8 @@ final class PlayerEngine {
 
     func previous() {
         guard let q = queue else {
-            seek(to: 0)
+            // Back a chapter (or to the start of this one, more than 3 s in); without chapters, to the start.
+            seek(to: track?.previousChapterStart(from: targetPosition) ?? 0)
             return
         }
         if pendingQueueTarget == nil, livePosition > 3 {
@@ -643,6 +690,7 @@ final class PlayerEngine {
         player.pause()
         player.replaceCurrentItem(with: nil)
         track = nil
+        chapter = nil
         queue = nil
         currentLink = nil
         isResolving = false
@@ -698,6 +746,7 @@ final class PlayerEngine {
     private func restartCurrentTrack() {
         hasEnded = false
         currentTime = 0
+        updateChapter(at: 0)
         player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         player.defaultRate = Float(speed.rawValue)
         player.play()
