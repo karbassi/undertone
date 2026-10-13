@@ -54,7 +54,8 @@ final class PlayerEngine {
         return "speaker.wave.3.fill"
     }
 
-    /// yt-dlp's duration wins: AVFoundation reports double the real length for YouTube's m4a streams.
+    /// yt-dlp's duration wins: AVFoundation reports double the real length for a YouTube m4a opened as a file
+    /// (the chunked fallback). Played as HLS it gets the length right.
     var duration: Double? {
         if let d = track?.duration, d > 0 { return d }
         guard let t = player.currentItem?.duration, t.isNumeric, t.seconds.isFinite, t.seconds > 0 else { return nil }
@@ -88,8 +89,8 @@ final class PlayerEngine {
     @ObservationIgnored private var persistVolumeTask: Task<Void, Never>?
     @ObservationIgnored private var stateSyncTask: Task<Void, Never>?
     @ObservationIgnored private var failedWarmKeys: [String: Date] = [:]
-    /// Feeds the current YouTube item in bounded ranges; held here because AVAssetResourceLoader keeps it weakly.
-    @ObservationIgnored private var streamLoader: ChunkedStreamLoader?
+    /// Feeds the current YouTube item (its playlist, or bounded ranges); held here because AVAssetResourceLoader keeps it weakly.
+    @ObservationIgnored private var streamLoader: (any AVAssetResourceLoaderDelegate)?
     @ObservationIgnored private var positionObserver: Any?
     /// Where an in-flight seek (the resume seek on load, or a user seek) is heading; until it lands the player clock
     /// still reads the old time (or 0), so this stands in for it.
@@ -275,25 +276,24 @@ final class PlayerEngine {
     private func resolveAndPlay(_ link: MediaLink, startAt: Double? = nil, queueTarget: Int? = nil) {
         resolveTask?.cancel()
         let key = link.cacheKey
-
-        if let cached = settings.streamCache.track(forKey: key) {
-            log.notice("cache hit \(key, privacy: .public)")
-            load(cached, link: link, startAt: startAt, queueTarget: queueTarget)
-            return
-        }
-
-        isResolving = true
         pendingQueueTarget = queueTarget
-        if let queueTarget, let q = queue, q.entries.indices.contains(queueTarget) {
-            resolvingTitle = q.entries[queueTarget].title
+
+        let cached = settings.streamCache.track(forKey: key)
+        if cached != nil {
+            log.notice("cache hit \(key, privacy: .public)")
         } else {
-            resolvingTitle = queue?.current?.title ?? "Resolving…"
+            isResolving = true
+            if let queueTarget, let q = queue, q.entries.indices.contains(queueTarget) {
+                resolvingTitle = q.entries[queueTarget].title
+            } else {
+                resolvingTitle = queue?.current?.title ?? "Resolving…"
+            }
         }
-        let inFlight = backgroundResolves[key]
+        let inFlight = cached == nil ? backgroundResolves[key] : nil
         resolveTask = Task { [weak self] in
             guard let self else { return }
             do {
-                var track: Track?
+                var track = cached
                 if let inFlight {
                     track = await inFlight.value   // a warm-up or prefetch is already fetching this one
                 }
@@ -302,12 +302,37 @@ final class PlayerEngine {
                     track = try await client.resolve(link)
                 }
                 guard let track, !Task.isCancelled else { return }
-                self.settings.streamCache.store(track, forKey: key)
-                self.load(track, link: link, startAt: startAt, queueTarget: queueTarget)
+                if cached == nil { self.settings.streamCache.store(track, forKey: key) }
+                // The current track keeps playing while the new one's stream is prepared (its segment index fetched).
+                guard let source = await self.streamSource(for: track), !Task.isCancelled else { return }
+                self.load(track, source: source, link: link, startAt: startAt, queueTarget: queueTarget)
             } catch {
                 self.handle(error)
             }
         }
+    }
+
+    /// What AVPlayer gets for `track`. A YouTube stream plays as HLS built from the file's segment index, so only what
+    /// is about to play gets downloaded; without a usable index it goes through the chunked loader instead.
+    /// - Returns: nil only if the task was cancelled meanwhile.
+    private func streamSource(for track: Track) async -> StreamSource? {
+        var options: [String: Any] = [:]
+        if let userAgent = track.userAgent { options[AVURLAssetHTTPUserAgentKey] = userAgent }
+        guard track.isYouTube else {
+            return StreamSource(asset: AVURLAsset(url: track.streamURL, options: options), loader: nil)
+        }
+        if let loader = await SegmentedStreamLoader.load(streamURL: track.streamURL, headers: track.httpHeaders) {
+            // Only the playlist goes through the loader; AVFoundation fetches the segments from YouTube itself.
+            let asset = AVURLAsset(url: loader.assetURL, options: options)
+            asset.resourceLoader.setDelegate(loader, queue: loader.queue)
+            return StreamSource(asset: asset, loader: loader)
+        }
+        guard !Task.isCancelled else { return nil }
+        // YouTube throttles AVPlayer's open-ended range requests; a long mix would never start.
+        let loader = ChunkedStreamLoader(streamURL: track.streamURL, headers: track.httpHeaders, fileExtension: track.streamExtension)
+        let asset = AVURLAsset(url: loader.assetURL)
+        asset.resourceLoader.setDelegate(loader, queue: loader.queue)
+        return StreamSource(asset: asset, loader: loader)
     }
 
     /// Resolves a pasted/clipboard link in the background so pressing Play afterwards is instant.
@@ -357,7 +382,7 @@ final class PlayerEngine {
         }
     }
 
-    private func load(_ track: Track, link: MediaLink, startAt: Double?, queueTarget: Int?) {
+    private func load(_ track: Track, source: StreamSource, link: MediaLink, startAt: Double?, queueTarget: Int?) {
         if let current = currentLink, current.cacheKey != link.cacheKey { savePosition() }
         // An explicit start (a recovery, an idle reload, or a link's `t=` with no saved position) wins; nil picks up the saved position.
         let startAt = startAt ?? settings.positions[link.cacheKey]?.seconds
@@ -382,22 +407,14 @@ final class PlayerEngine {
         currentTime = startAt ?? 0
         log.notice("loaded \(track.title, privacy: .public) [\(track.streamExtension ?? "?", privacy: .public) \(track.audioCodec ?? "?", privacy: .public)] duration \(track.duration ?? -1) start \(startAt ?? 0)")
 
-        let asset: AVURLAsset
-        if track.isYouTube {
-            // YouTube throttles AVPlayer's open-ended range requests; a long mix would never start.
-            let loader = ChunkedStreamLoader(streamURL: track.streamURL, headers: track.httpHeaders, fileExtension: track.streamExtension)
-            asset = AVURLAsset(url: loader.assetURL)
-            asset.resourceLoader.setDelegate(loader, queue: loader.queue)
-            streamLoader = loader
-        } else {
-            var options: [String: Any] = [:]
-            if let userAgent = track.userAgent { options[AVURLAssetHTTPUserAgentKey] = userAgent }
-            asset = AVURLAsset(url: track.streamURL, options: options)
-        }
-        let item = AVPlayerItem(asset: asset)
+        streamLoader = source.loader
+        let item = AVPlayerItem(asset: source.asset)
         // Measured on an M1: the pitch algorithm makes no CPU difference at 2× (spectral 4.5% vs timeDomain
         // 4.4% of one core; decoding twice the samples dominates), so keep the higher-quality one.
         item.audioTimePitchAlgorithm = .spectral
+        if source.loader is SegmentedStreamLoader {
+            item.preferredForwardBufferDuration = SegmentedStreamLoader.forwardBufferDuration
+        }
         if let d = track.duration, d > 0 {
             item.forwardPlaybackEndTime = CMTime(seconds: d, preferredTimescale: 600)
         }
@@ -429,7 +446,7 @@ final class PlayerEngine {
         itemStatusTask = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         endObserver = nil
-        streamLoader?.cancelAll()
+        (streamLoader as? ChunkedStreamLoader)?.cancelAll()   // the segmented loader has nothing in flight
         streamLoader = nil
         pendingSeekTarget = nil
     }
@@ -751,4 +768,10 @@ final class PlayerEngine {
         errorSuggestion = suggestion
         log.error("\(message, privacy: .public)")
     }
+}
+
+/// An asset for AVPlayer and the resource loader feeding it, if any.
+private struct StreamSource {
+    let asset: AVURLAsset
+    let loader: (any AVAssetResourceLoaderDelegate)?
 }
