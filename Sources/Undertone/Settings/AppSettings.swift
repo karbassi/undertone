@@ -50,7 +50,9 @@ final class AppSettings {
         static let lastLink = "lastLink"
         static let repeatMode = "repeatMode"
         static let showTitle = "showTitleInMenuBar"
-        static let streamCache = "streamCache"
+        /// Bumped when `Track` gains data older entries lack (v2: chapters), so a stale cache hit can't hide it.
+        static let streamCache = "streamCacheV2"
+        static let legacyStreamCaches = ["streamCache"]
         static let ytdlpCachedPath = "ytdlpCachedPath"
         static let ytdlpCachedDeno = "ytdlpCachedDeno"
         static let ytdlpCachedVersion = "ytdlpCachedVersion"
@@ -77,6 +79,7 @@ final class AppSettings {
         lastLink = defaults.string(forKey: Keys.lastLink)
         repeatMode = RepeatMode(rawValue: defaults.string(forKey: Keys.repeatMode) ?? "") ?? .off
         showTitleInMenuBar = defaults.bool(forKey: Keys.showTitle)
+        Keys.legacyStreamCaches.forEach(defaults.removeObject(forKey:))
         streamCache = StreamCache(decoding: defaults.data(forKey: Keys.streamCache) ?? Data())
         ytdlpCachedPath = defaults.string(forKey: Keys.ytdlpCachedPath)
         ytdlpCachedDeno = defaults.string(forKey: Keys.ytdlpCachedDeno)
