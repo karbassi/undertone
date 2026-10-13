@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-26
+    permissions:
+      contents: write
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # bundle.sh numbers the build from the commit count
+
+      - name: Build and sign
+        run: |
+          # bundle.sh substitutes the version into Info.plist with sed; allow only vX.Y.Z[-suffix].
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not vX.Y.Z or vX.Y.Z-suffix"
+            exit 1
+          fi
+          swift --version
+          # CFBundleShortVersionString must be X.Y.Z, so a prerelease's suffix stays on the tag only.
+          ARCHS="arm64 x86_64" VERSION="${version%%-*}" ./scripts/bundle.sh
+          lipo -archs build/Undertone.app/Contents/MacOS/Undertone
+
+      - name: Create zip
+        run: ditto -c -k --sequesterRsrc --keepParent build/Undertone.app Undertone.zip
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A rerun (e.g. after a failed tap dispatch) replaces the asset instead of failing.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" Undertone.zip --clobber
+            exit 0
+          fi
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" Undertone.zip \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            $prerelease
+
+      # Stable releases only: the tap reads releases/latest, which skips prereleases.
+      # Without the token the tap's daily auto-update still picks the release up.
+      - name: Trigger homebrew-tap update
+        if: env.HAS_TAP_TOKEN == 'true' && !contains(github.ref_name, '-')
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # v3.0.0
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: karbassi/homebrew-tap
+          event-type: release
+          client-payload: '{"cask": "undertone"}'
