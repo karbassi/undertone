@@ -118,7 +118,7 @@ Percent-encode the `url` value (`&` becomes `%26`), or the link's own parameters
 
 No video is ever downloaded or decoded. yt-dlp's reported duration is used for the progress bar because YouTube's audio files report a misleading length to the player. Resolved stream URLs are cached until they expire, so a replay of a track that isn't saved to disk yet still skips yt-dlp.
 
-The trade-off of the audio cache: the first play of a track costs the stream plus the whole file (about 58 MB per hour of audio), even if you stop early. Tracks skipped within 20 seconds cost nothing extra, files over 512 MB are never cached, and every later play costs nothing. `brew uninstall --zap undertone` removes the cache along with the app.
+The trade-off of the audio cache: the first play of a track costs the stream plus the whole file (about 58 MB per hour of audio), even if you stop early. Tracks skipped within 20 seconds cost nothing extra, files over 500 MB are never cached, and every later play costs nothing. `brew uninstall --zap undertone` removes the cache along with the app.
 
 ### Performance
 

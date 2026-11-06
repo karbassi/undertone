@@ -69,7 +69,7 @@ struct SettingsView: View {
             section("Audio cache") {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(ByteCountFormatter.string(fromByteCount: engine.audioCacheBytes, countStyle: .file)) of \(ByteCountFormatter.string(fromByteCount: engine.audioCache.capacity, countStyle: .file))")
+                        Text(audioCacheLabel)
                             .font(.caption)
                         Text("Tracks you play are kept so replays need no download.")
                             .font(.caption2).foregroundStyle(.tertiary)
@@ -168,6 +168,13 @@ struct SettingsView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "dev"
         guard let build = info?["CFBundleVersion"] as? String, !build.isEmpty else { return "Undertone \(version)" }
         return "Undertone \(version) (\(build))"
+    }
+
+    /// "Empty (up to 2 GB)" or "340 MB of 2 GB used". ByteCountFormatter alone says "Zero KB".
+    private var audioCacheLabel: String {
+        let cap = ByteCountFormatter.string(fromByteCount: engine.audioCache.capacity, countStyle: .file)
+        guard engine.audioCacheBytes > 0 else { return "Empty (up to \(cap))" }
+        return "\(ByteCountFormatter.string(fromByteCount: engine.audioCacheBytes, countStyle: .file)) of \(cap) used"
     }
 
     private var toolSymbol: String {
