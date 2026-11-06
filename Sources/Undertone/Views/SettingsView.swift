@@ -24,36 +24,6 @@ struct SettingsView: View {
                 IconButton(symbol: "power", help: "Quit Undertone") { NSApp.terminate(nil) }
             }
 
-            section("Appearance", trailing: {
-                Button("Reset to default") { settings.resetAppearance() }
-                    .buttonStyle(.link)
-                    .font(.caption2)
-                    .disabled(settings.isDefaultAppearance)
-                    .help("Blue tint at medium intensity on regular Liquid Glass")
-            }) {
-                swatches
-                HStack {
-                    Text("Custom").font(.caption).frame(width: 60, alignment: .leading)
-                    HueSlider(hex: $settings.tintHex)
-                }
-                HStack {
-                    Text("Intensity").font(.caption).frame(width: 60, alignment: .leading)
-                    Slider(value: $settings.tintOpacity, in: 0.15...0.85).controlSize(.small)
-                        .disabled(settings.tintHex == nil)
-                }
-                HStack {
-                    Text("Glass").font(.caption).frame(width: 60, alignment: .leading)
-                    Picker("Glass", selection: $settings.glassStyle) {
-                        ForEach(GlassStyleChoice.allCases) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented).labelsHidden().controlSize(.small)
-                    Picker("Backdrop", selection: $settings.backdrop) {
-                        ForEach(BackdropChoice.allCases) { Text($0.label).tag($0) }
-                    }
-                    .labelsHidden().controlSize(.small).frame(width: 110)
-                }
-            }
-
             section("Shortcuts") {
                 shortcutRow("Play / Pause", .togglePlayPause)
                 shortcutRow("Cycle speed", .cycleSpeed)
@@ -138,20 +108,12 @@ struct SettingsView: View {
         }
     }
 
-    private func section<Content: View, Trailing: View>(
-        _ title: String,
-        @ViewBuilder trailing: () -> Trailing = { EmptyView() },
-        @ViewBuilder content: () -> Content
-    ) -> some View {
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title.uppercased())
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .kerning(0.5)
-                Spacer()
-                trailing()
-            }
+            Text(title.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .kerning(0.5)
             content()
         }
     }
@@ -162,32 +124,6 @@ struct SettingsView: View {
             Spacer()
             KeyboardShortcuts.Recorder(for: name)
                 .controlSize(.small)
-        }
-    }
-
-    private var swatches: some View {
-        HStack(spacing: 8) {
-            ForEach(TintPreset.all) { preset in
-                Button {
-                    settings.tintHex = preset.hex
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(preset.hex.flatMap(Color.init(hex:)) ?? Color.clear)
-                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.25), lineWidth: 1))
-                        if preset.hex == nil {
-                            Image(systemName: "slash.circle").font(.system(size: 11)).foregroundStyle(.secondary)
-                        }
-                        if settings.tintHex == preset.hex {
-                            Circle().strokeBorder(Color.primary, lineWidth: 2).padding(-3)
-                        }
-                    }
-                    .frame(width: 20, height: 20)
-                    .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .help(preset.name)
-            }
         }
     }
 
@@ -234,40 +170,5 @@ struct SettingsView: View {
         case .missing: return "Not found. Install with Homebrew."
         case .broken(let m): return "Not working: \(m)"
         }
-    }
-}
-
-/// A hue slider that writes a saturated color back as hex.
-struct HueSlider: View {
-    @Binding var hex: String?
-    @State private var hue: Double = 0.6
-
-    var body: some View {
-        Slider(value: $hue, in: 0...1) { editing in
-            if !editing { commit() }
-        }
-        .controlSize(.small)
-        .onChange(of: hue) { _, _ in commit() }
-        .onAppear { syncFromHex() }
-        .onChange(of: hex) { _, _ in syncFromHex() }
-        .background(
-            LinearGradient(colors: stride(from: 0.0, through: 1.0, by: 0.1).map { Color(hue: $0, saturation: 0.75, brightness: 0.95) },
-                           startPoint: .leading, endPoint: .trailing)
-                .frame(height: 4)
-                .clipShape(Capsule())
-                .opacity(0.9)
-        )
-    }
-
-    private func commit() {
-        let color = NSColor(hue: hue, saturation: 0.72, brightness: 0.92, alpha: 1)
-        let newHex = color.hexString
-        if newHex != hex { hex = newHex }
-    }
-
-    private func syncFromHex() {
-        guard let hex, let color = NSColor(hex: hex)?.usingColorSpace(.deviceRGB) else { return }
-        let value = Double(color.hueComponent)
-        if abs(value - hue) > 0.01 { hue = value }
     }
 }

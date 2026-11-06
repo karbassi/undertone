@@ -64,7 +64,6 @@ final class PanelController {
     private let hosting: NSHostingView<PanelRoot>
     private let settings: AppSettings
     private let engine: PlayerEngine
-    private var glassView: NSGlassEffectView?
     private var contentSize = CGSize(width: PanelController.width, height: 220)
     private var globalMonitor: Any?
     private var localMouseMonitor: Any?
@@ -112,7 +111,6 @@ final class PanelController {
         hosting.sizingOptions = []
         state.controller = self
         rebuildBackdrop()
-        observeSettings()
         // AppKit may resize the window itself from Auto Layout (`_changeWindowFrameFromConstraintsIfNecessary`) when
         // some required constraint in the content view disagrees with the frame. Nothing here should, but if it ever
         // happens, put the frame back once instead of leaving the panel misplaced.
@@ -147,7 +145,7 @@ final class PanelController {
         guard let button = statusButton else { return }
         let wasVisible = isVisible
         isVisible = true
-        if settings.backdrop == .glass { rebuildBackdrop() } else { applyAppearance() }   // rebuild works around a stale-glass bug seen on 26.2
+        rebuildBackdrop()   // works around a stale-glass bug seen on 26.2
         if wasVisible {
             state.showSettings(showSettings)   // slides, like tapping the gear or Back
         } else {
@@ -345,24 +343,9 @@ final class PanelController {
         let shadow = PanelShadowView(frame: container.bounds, cornerRadius: Self.cornerRadius)
         // The SwiftUI view sits beside the surface, not inside it: `NSGlassEffectView.contentView` takes over its
         // content's layout.
-        let surface: NSView
-        switch settings.backdrop {
-        case .glass:
-            let glass = NSGlassEffectView(frame: Self.glassRect(in: container.bounds))
-            glass.cornerRadius = Self.cornerRadius
-            glassView = glass
-            surface = glass
-        case .blur:
-            let blur = NSVisualEffectView(frame: Self.glassRect(in: container.bounds))
-            blur.material = .hudWindow
-            blur.blendingMode = .behindWindow
-            blur.state = .active
-            blur.wantsLayer = true
-            blur.layer?.cornerRadius = Self.cornerRadius
-            blur.layer?.masksToBounds = true
-            glassView = nil
-            surface = blur
-        }
+        // Stock Liquid Glass: default style, no tint. It follows light/dark, Increase Contrast and Reduce Transparency.
+        let surface = NSGlassEffectView(frame: Self.glassRect(in: container.bounds))
+        surface.cornerRadius = Self.cornerRadius
         for view in [shadow, surface, hosting] {
             view.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(view)
@@ -383,35 +366,6 @@ final class PanelController {
             hosting.bottomAnchor.constraint(equalTo: surface.bottomAnchor),
         ])
         panel.contentView = root
-        applyAppearance()
-    }
-
-    private func applyAppearance() {
-        if let glass = glassView {
-            glass.tintColor = tintColor
-            glass.style = settings.glassStyle == .clear ? .clear : .regular
-        }
-    }
-
-    private var tintColor: NSColor? {
-        guard let hex = settings.tintHex, let color = NSColor(hex: hex) else { return nil }
-        return color.withAlphaComponent(settings.tintOpacity)
-    }
-
-    private func observeSettings() {
-        let backdropBefore = settings.backdrop
-        withObservationTracking {
-            _ = settings.tintHex
-            _ = settings.tintOpacity
-            _ = settings.glassStyle
-            _ = settings.backdrop
-        } onChange: { [weak self] in
-            Task { @MainActor in
-                guard let self else { return }
-                if self.settings.backdrop != backdropBefore { self.rebuildBackdrop() } else { self.applyAppearance() }
-                self.observeSettings()
-            }
-        }
     }
 
     // MARK: - Dismissal and keys
