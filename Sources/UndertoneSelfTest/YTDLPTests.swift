@@ -50,13 +50,21 @@ import Testing
 final class FakeRunner: ProcessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var calls: [[String]] = []
+    private(set) var timeouts: [Duration] = []
     var results: [ProcessResult]
+    /// Thrown by the first calls, in order, before any canned result is replayed.
+    var errors: [Error]
 
-    init(results: [ProcessResult]) { self.results = results }
+    init(results: [ProcessResult], errors: [Error] = []) {
+        self.results = results
+        self.errors = errors
+    }
 
     func run(executable: URL, arguments: [String], environment: [String: String], timeout: Duration) async throws -> ProcessResult {
-        lock.withLock {
+        try lock.withLock {
             calls.append(arguments)
+            timeouts.append(timeout)
+            if !errors.isEmpty { throw errors.removeFirst() }
             guard !results.isEmpty else { return ProcessResult(exitCode: 1, stdout: Data(), stderr: Data("ERROR: no canned result".utf8)) }
             return results.removeFirst()
         }
@@ -82,6 +90,28 @@ final class FakeRunner: ProcessRunning, @unchecked Sendable {
         #expect(runner.calls[0].contains("deno:/usr/local/bin/deno"))
         #expect(runner.calls[0].contains("--no-playlist"))
         #expect(runner.calls[0].last == "https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+    }
+
+    @Test func hungFastClientFallsBackToDefaultClients() async throws {
+        let runner = FakeRunner(results: [ProcessResult(exitCode: 0, stdout: Data(Fixtures.videoJSON.utf8), stderr: Data())],
+                                errors: [YTDLPFailure.timedOut])
+        let client = YTDLPClient(executable: executable, environment: [:], runner: runner, timeout: .seconds(45))
+        let track = try await client.resolve(link)
+        #expect(track.id == "aqz-KE-bpKQ")
+        #expect(runner.calls.count == 2)
+        #expect(runner.calls[0].contains("youtube:player_client=visionos"))
+        #expect(!runner.calls[1].contains("youtube:player_client=visionos"))
+        // The fast attempt is capped so a hang leaves the default clients most of the time.
+        #expect(runner.timeouts == [YTDLPClient.fastClientTimeout, .seconds(45)])
+    }
+
+    @Test func defaultClientTimeoutIsReported() async {
+        let runner = FakeRunner(results: [], errors: [YTDLPFailure.timedOut, YTDLPFailure.timedOut])
+        let client = YTDLPClient(executable: executable, environment: [:], runner: runner)
+        await #expect(throws: YTDLPFailure.timedOut) {
+            try await client.resolve(link)
+        }
+        #expect(runner.calls.count == 2)
     }
 
     @Test func unavailableIsNotRetried() async {
