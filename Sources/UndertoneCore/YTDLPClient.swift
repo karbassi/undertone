@@ -13,6 +13,8 @@ public struct YTDLPClient: Sendable {
     public static let formatSelector = "bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/best[ext=mp4]/best"
     /// The fastest client measured (≈5 s vs ≈8.5 s for the default set). Falls back to the default set on failure.
     public static let fastClient = "visionos"
+    /// The fast client normally answers in 5–10 s; past this it is stuck, so the default set gets the rest of the time.
+    public static let fastClientTimeout: Duration = .seconds(20)
 
     public init(executable: URL, jsRuntime: URL? = nil, environment: [String: String],
                 runner: any ProcessRunning = SystemProcessRunner(), timeout: Duration = .seconds(45)) {
@@ -49,15 +51,16 @@ public struct YTDLPClient: Sendable {
         let common = baseArguments + ["--no-playlist", "-f", Self.formatSelector, "-j"]
         if link.isYouTube {
             do {
-                return try await resolveOnce(common + ["--extractor-args", "youtube:player_client=\(Self.fastClient)", target])
-            } catch let failure as YTDLPFailure where failure.shouldRetryWithDefaultClients {
-                // Fall through to yt-dlp's own client rotation.
+                return try await resolveOnce(common + ["--extractor-args", "youtube:player_client=\(Self.fastClient)", target],
+                                             timeout: min(timeout, Self.fastClientTimeout))
+            } catch let failure as YTDLPFailure where failure.shouldRetryWithDefaultClients || failure == .timedOut {
+                // Fall through to yt-dlp's own client rotation. A hung fast client gets the same second chance.
             }
         }
-        return try await resolveOnce(common + [target])
+        return try await resolveOnce(common + [target], timeout: timeout)
     }
 
-    private func resolveOnce(_ arguments: [String]) async throws -> Track {
+    private func resolveOnce(_ arguments: [String], timeout: Duration) async throws -> Track {
         let result = try await runner.run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
         guard result.exitCode == 0 else {
             throw YTDLPDiagnostics.classify(exitCode: result.exitCode, stderr: String(decoding: result.stderr, as: UTF8.self))
