@@ -20,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: jdx/mise-action@v2
 
@@ -49,6 +51,21 @@ jobs:
             echo "::error::Build has warnings outside Vendor"
             exit 1
           fi
+
+      - name: "PROBE: fresh mtimes, no fix"
+        run: |
+          git ls-files -z | xargs -0 touch
+          swift build --product Undertone 2>&1 | tee probe-a.log | tail -2
+          echo "PROBE-A compiles: $(grep -c Compiling probe-a.log || true)"
+
+      - name: "PROBE: fresh mtimes, then restore-mtime"
+        run: |
+          python3 -I scripts/restore-mtime.py
+          swift build --product Undertone >/dev/null 2>&1
+          git ls-files -z | xargs -0 touch
+          python3 -I scripts/restore-mtime.py
+          swift build --product Undertone 2>&1 | tee probe-b.log | tail -2
+          echo "PROBE-B compiles: $(grep -c Compiling probe-b.log || true)"
 
       - name: Test
         run: mise run test
