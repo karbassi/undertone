@@ -20,12 +20,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # restore-mtime needs each file's last commit, not just the tip's
 
       - uses: jdx/mise-action@v2
 
+      # Checkout stamps every file with the current time, so a restored .build would recompile everything (54 files,
+      # measured on this runner). Commit times are the same on every checkout, so unchanged files match the cache.
+      - name: Restore source mtimes
+        run: python3 -I scripts/restore-mtime.py
+
       # Build products only fit the compiler that made them, so the toolchain is part of the key. The source hash
       # gives every change its own entry; restore-keys falls back to the newest one, and SwiftPM rebuilds only what
-      # differs (about 9 s warm vs 58 s cold, even though checkout gives every file a fresh mtime).
+      # differs. This workflow and the mtime script are hashed too: a change to how the cache is built must not
+      # exact-hit (and so never replace) an entry built the old way.
       - name: Cache key
         id: key
         run: |
@@ -37,7 +45,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .build
-          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ steps.key.outputs.toolchain }}-${{ hashFiles('Package.swift', 'Sources/**', 'Vendor/**') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ steps.key.outputs.toolchain }}-${{ hashFiles('Package.swift', 'Sources/**', 'Vendor/**', 'scripts/restore-mtime.py', '.github/workflows/ci.yml') }}
           restore-keys: spm-${{ runner.os }}-${{ runner.arch }}-${{ steps.key.outputs.toolchain }}-
 
       - name: Build
