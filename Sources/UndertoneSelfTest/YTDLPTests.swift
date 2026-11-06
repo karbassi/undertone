@@ -44,6 +44,19 @@ import Testing
         #expect(!YTDLPFailure.unavailable(message: "x").shouldRetryWithDefaultClients)
         #expect(YTDLPFailure.outdated(message: "x").suggestion == "Update it: brew upgrade yt-dlp")
     }
+
+    @Test func classifiesUnsupportedSites() {
+        // What yt-dlp 2026.10 prints with `--use-extractors default,-generic` for a page no real extractor handles.
+        let noExtractor = "ERROR: No suitable extractor found for URL https://apnews.com/article/abc123"
+        #expect(YTDLPDiagnostics.classify(exitCode: 1, stderr: noExtractor, host: "apnews.com") == .unsupported(host: "apnews.com"))
+        // The generic extractor giving up (generic enabled) means the same thing.
+        #expect(YTDLPDiagnostics.classify(exitCode: 1, stderr: "ERROR: Unsupported URL: https://example.com/", host: "example.com") == .unsupported(host: "example.com"))
+        #expect(YTDLPDiagnostics.classify(exitCode: 1, stderr: noExtractor) == .unsupported(host: "this site"))
+        let failure = YTDLPFailure.unsupported(host: "apnews.com")
+        #expect(failure.message == "Undertone can't play links from apnews.com.")
+        #expect(failure.suggestion != nil)
+        #expect(!failure.shouldRetryWithDefaultClients)
+    }
 }
 
 /// Records invocations and replays canned results.
@@ -131,6 +144,31 @@ final class FakeRunner: ProcessRunning, @unchecked Sendable {
         _ = try await client.resolve(LinkParser.parse("https://soundcloud.com/a/b")!)
         #expect(runner.calls.count == 1)
         #expect(!runner.calls[0].contains("--extractor-args"))
+        // A supported site still runs once, restricted to real extractors.
+        #expect(runner.calls[0].contains("--use-extractors"))
+        #expect(runner.calls[0].contains(YTDLPClient.supportedExtractors))
+        #expect(runner.calls[0].last == "https://soundcloud.com/a/b")
+    }
+
+    @Test func youTubeIsNotRestrictedToSiteExtractors() async throws {
+        let runner = FakeRunner(results: [ProcessResult(exitCode: 0, stdout: Data(Fixtures.videoJSON.utf8), stderr: Data())])
+        let client = YTDLPClient(executable: executable, environment: [:], runner: runner)
+        _ = try await client.resolve(link)
+        #expect(runner.calls.count == 1)   // no extra support check on the fast path
+        #expect(!runner.calls[0].contains("--use-extractors"))
+        #expect(runner.calls[0].contains("youtube:player_client=visionos"))
+    }
+
+    @Test func unsupportedSiteFailsOnceWithItsHost() async {
+        let runner = FakeRunner(results: [
+            ProcessResult(exitCode: 1, stdout: Data(), stderr: Data("ERROR: No suitable extractor found for URL https://www.example-news.com/story".utf8)),
+        ])
+        let client = YTDLPClient(executable: executable, environment: [:], runner: runner)
+        await #expect(throws: YTDLPFailure.unsupported(host: "example-news.com")) {
+            try await client.resolve(LinkParser.parse("https://www.example-news.com/story")!)
+        }
+        #expect(runner.calls.count == 1)
+        #expect(runner.calls[0].contains("--use-extractors"))
     }
 
     @Test func playlistListing() async throws {

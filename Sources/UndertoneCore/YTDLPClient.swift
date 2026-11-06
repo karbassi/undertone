@@ -15,6 +15,9 @@ public struct YTDLPClient: Sendable {
     public static let fastClient = "visionos"
     /// The fast client normally answers in 5–10 s; past this it is stuck, so the default set gets the rest of the time.
     public static let fastClientTimeout: Duration = .seconds(20)
+    /// Every extractor except the catch-all generic one, so a page no real extractor supports (a news article, a blog)
+    /// fails in about 2 s with "No suitable extractor found" instead of being downloaded and searched for media.
+    public static let supportedExtractors = "default,-generic"
 
     public init(executable: URL, jsRuntime: URL? = nil, environment: [String: String],
                 runner: any ProcessRunning = SystemProcessRunner(), timeout: Duration = .seconds(45)) {
@@ -57,13 +60,14 @@ public struct YTDLPClient: Sendable {
                 // Fall through to yt-dlp's own client rotation. A hung fast client gets the same second chance.
             }
         }
-        return try await resolveOnce(common + [target], timeout: timeout)
+        let restrict = link.isYouTube ? [] : ["--use-extractors", Self.supportedExtractors]
+        return try await resolveOnce(common + restrict + [target], timeout: timeout, host: link.displayHost)
     }
 
-    private func resolveOnce(_ arguments: [String], timeout: Duration) async throws -> Track {
+    private func resolveOnce(_ arguments: [String], timeout: Duration, host: String? = nil) async throws -> Track {
         let result = try await runner.run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
         guard result.exitCode == 0 else {
-            throw YTDLPDiagnostics.classify(exitCode: result.exitCode, stderr: String(decoding: result.stderr, as: UTF8.self))
+            throw YTDLPDiagnostics.classify(exitCode: result.exitCode, stderr: String(decoding: result.stderr, as: UTF8.self), host: host)
         }
         return try Track.decode(fromYTDLPJSON: result.stdout)
     }
