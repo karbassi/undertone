@@ -55,7 +55,7 @@ public struct YTDLPClient: Sendable {
         if link.isYouTube {
             do {
                 return try await resolveOnce(common + ["--extractor-args", "youtube:player_client=\(Self.fastClient)", target],
-                                             timeout: min(timeout, Self.fastClientTimeout))
+                                             timeout: min(timeout, Self.fastClientTimeout), host: link.displayHost)
             } catch let failure as YTDLPFailure where failure.shouldRetryWithDefaultClients || failure == .timedOut {
                 // Fall through to yt-dlp's own client rotation. A hung fast client gets the same second chance.
             }
