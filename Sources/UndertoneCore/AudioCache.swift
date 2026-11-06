@@ -8,7 +8,8 @@ import Foundation
 /// or half-purged entry is simply a miss. The directory itself is the index, since macOS may purge Caches at any time.
 /// Least recently played entries are evicted once the total passes `capacity`.
 public struct AudioCache: Sendable {
-    public static let defaultCapacity: Int64 = 2 << 30
+    /// Decimal, like Finder and ByteCountFormatter: Settings shows "2 GB", not "2.15 GB".
+    public static let defaultCapacity: Int64 = 2_000_000_000
 
     public struct Entry: Codable, Equatable, Sendable {
         public let track: Track
@@ -36,7 +37,7 @@ public struct AudioCache: Sendable {
         return AudioCache(directory: caches.appending(path: bundleIdentifier ?? "com.jverissimo.undertone").appending(path: "Audio"))
     }
 
-    /// Larger files are not worth caching: a quarter of the cap (512 MB of a 2 GB cap is about nine hours of audio).
+    /// Larger files are not worth caching: a quarter of the cap (500 MB of a 2 GB cap is about eight and a half hours of audio).
     public var maxFileSize: Int64 { capacity / 4 }
 
     // MARK: - Paths
