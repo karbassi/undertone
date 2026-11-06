@@ -8,8 +8,10 @@ public enum YTDLPFailure: Error, Equatable, Sendable {
     /// yt-dlp is talking to a YouTube that changed under it. The fix is `brew upgrade yt-dlp`.
     case outdated(message: String)
     case missingJSRuntime(message: String)
-    /// Private, removed, age-gated, geo-blocked, members-only, or an unsupported page.
+    /// Private, removed, age-gated, geo-blocked or members-only.
     case unavailable(message: String)
+    /// No yt-dlp extractor (other than the catch-all generic one) handles links from this host.
+    case unsupported(host: String)
     case network(message: String)
     case failed(exitCode: Int32, message: String)
     case invalidOutput
@@ -23,6 +25,7 @@ public enum YTDLPFailure: Error, Equatable, Sendable {
         case .outdated(let m), .missingJSRuntime(let m), .unavailable(let m), .network(let m): return m
         case .failed(let code, let m): return m.isEmpty ? "yt-dlp failed (exit \(code))." : m
         case .invalidOutput: return "yt-dlp returned something unexpected."
+        case .unsupported(let host): return "Undertone can't play links from \(host)."
         }
     }
 
@@ -33,6 +36,7 @@ public enum YTDLPFailure: Error, Equatable, Sendable {
         case .missingJSRuntime: return "brew install deno"
         case .invalidOutput, .failed: return "Try again; if it keeps failing: brew upgrade yt-dlp"
         case .network: return "Check your connection and try again."
+        case .unsupported: return "Try a YouTube, SoundCloud, Bandcamp or Vimeo link."
         case .launchFailed, .timedOut, .cancelled, .unavailable: return nil
         }
     }
@@ -48,7 +52,8 @@ public enum YTDLPFailure: Error, Equatable, Sendable {
 
 public enum YTDLPDiagnostics {
     /// Maps a non-zero exit + stderr to a typed failure with a human-readable message.
-    public static func classify(exitCode: Int32, stderr: String) -> YTDLPFailure {
+    /// - Parameter host: the link's host, named in the message when no extractor supports it.
+    public static func classify(exitCode: Int32, stderr: String, host: String? = nil) -> YTDLPFailure {
         let message = lastErrorLine(in: stderr) ?? ""
         let haystack = stderr.lowercased()
 
@@ -57,11 +62,16 @@ public enum YTDLPDiagnostics {
         if mentions("javascript runtime", "js runtime", "no supported javascript", "--js-runtimes") {
             return .missingJSRuntime(message: message.isEmpty ? "yt-dlp needs a JavaScript runtime (deno) for YouTube." : message)
         }
+        // "No suitable extractor" is what `--use-extractors default,-generic` reports for a site only the generic
+        // extractor would try; "Unsupported URL" is the generic extractor giving up on it.
+        if mentions("no suitable extractor found", "unsupported url") {
+            return .unsupported(host: host ?? "this site")
+        }
         // Order matters: availability first, then YouTube-changed signals (incl. HTTP 403/429, which yt-dlp
         // prefixes with "Unable to download webpage"), then genuine connectivity errors, then unknown.
         if mentions("video unavailable", "private video", "this video is unavailable", "has been removed",
                     "sign in to confirm your age", "age-restricted", "members-only", "not available in your country",
-                    "this live event", "premieres in", "unsupported url", "is not a valid url",
+                    "this live event", "premieres in", "is not a valid url",
                     "video does not exist", "this channel does not exist", "video is not available",
                     "account has been terminated", "who has blocked it in your country") {
             return .unavailable(message: message.isEmpty ? "This link can't be played." : message)

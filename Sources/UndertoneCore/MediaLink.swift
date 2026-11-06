@@ -10,7 +10,8 @@ public struct MediaLink: Equatable, Sendable {
         /// A YouTube Mix / radio (`list=RD…`). YouTube generates one per video (mostly music); yt-dlp can list it
         /// when it exists, so it is tried as a queue and falls back to the video alone.
         case mix(videoID: String, listID: String)
-        /// Any other http(s) URL. Handed to yt-dlp unchanged (it supports many sites).
+        /// Any other http(s) URL. Handed to yt-dlp unchanged, restricted to its site-specific extractors: a link only
+        /// the generic extractor would try is reported as unsupported (`YTDLPFailure.unsupported`).
         case other
     }
 
@@ -37,6 +38,12 @@ public struct MediaLink: Equatable, Sendable {
         case .mix(let videoID, _): return videoID
         case .other: return nil
         }
+    }
+
+    /// The host as shown to people: lowercased, without a leading `www.`.
+    public var displayHost: String {
+        let host = original.host()?.lowercased() ?? original.absoluteString
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     public var playlistID: String? {

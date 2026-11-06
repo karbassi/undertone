@@ -833,6 +833,10 @@ final class PlayerEngine {
             resolveAndPlay(q.entries[failedTarget + 1].link, queueTarget: failedTarget + 1)
             return
         }
+        if case .unsupported? = error as? YTDLPFailure, let link = pastedLink,
+           settings.lastLink == link.original.absoluteString {
+            settings.lastLink = nil   // don't offer to reopen a link that can never play
+        }
         if let failure = error as? YTDLPFailure {
             fail(failure.message, suggestion: failure.suggestion)
         } else {
