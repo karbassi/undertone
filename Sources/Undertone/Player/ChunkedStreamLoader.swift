@@ -24,14 +24,20 @@ nonisolated final class ChunkedStreamLoader: NSObject, AVAssetResourceLoaderDele
     private let log = Logger(subsystem: "com.jverissimo.undertone", category: "stream")
     private let state = OSAllocatedUnfairLock(initialState: State())
 
+    /// Called once, off the main thread, when YouTube refuses the stream URL. AVFoundation answers a failed load by
+    /// waiting forever instead of failing the item, so the player has to be told to re-resolve.
+    private let onRefused: @Sendable (ChunkedStreamLoader, StreamRefused) -> Void
+
     private struct State {
         var tasks: [ObjectIdentifier: Task<Void, Never>] = [:]
         var contentLength: Int64?
+        var reportedRefusal = false
     }
 
-    init(streamURL: URL, headers: [String: String], fileExtension: String?) {
+    init(streamURL: URL, headers: [String: String], fileExtension: String?, onRefused: @escaping @Sendable (ChunkedStreamLoader, StreamRefused) -> Void) {
         self.streamURL = streamURL
         self.headers = headers
+        self.onRefused = onRefused
         contentType = fileExtension.flatMap { UTType(filenameExtension: $0)?.identifier } ?? UTType.mpeg4Movie.identifier
         let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -108,6 +114,9 @@ nonisolated final class ChunkedStreamLoader: NSObject, AVAssetResourceLoaderDele
         } catch {
             log.error("stream fetch failed: \(error.localizedDescription, privacy: .public)")
             request.finishLoading(with: error)
+            if let refused = error as? StreamRefused, state.withLock({ s in defer { s.reportedRefusal = true }; return !s.reportedRefusal }) {
+                onRefused(self, refused)
+            }
         }
     }
 
@@ -134,8 +143,10 @@ nonisolated final class ChunkedStreamLoader: NSObject, AVAssetResourceLoaderDele
             // The server ignored the range and sent the whole resource. Slicing it per chunk would
             // re-download the entire stream on every request, so reject it instead.
             throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Stream ignored the byte range (HTTP 200)"])
+        case let status where StreamRefused.isRefusal(status):
+            // The signed URL expired or was refused; `onRefused` gets the player to re-resolve it.
+            throw StreamRefused(statusCode: status)
         default:
-            // 403 means the signed URL expired or was refused; the player's recovery re-resolves it.
             throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Stream returned HTTP \(http.statusCode)"])
         }
     }

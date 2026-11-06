@@ -304,10 +304,25 @@ final class PlayerEngine {
                     guard let client = await self.service.readyClient() else { self.handle(YTDLPFailure.notInstalled); return }
                     track = try await client.resolve(link)
                 }
-                guard let track, !Task.isCancelled else { return }
+                guard var track, !Task.isCancelled else { return }
                 if cached == nil { self.settings.streamCache.store(track, forKey: key) }
                 // The current track keeps playing while the new one's stream is prepared (its segment index fetched).
-                guard let source = await self.streamSource(for: track), !Task.isCancelled else { return }
+                let source: StreamSource
+                do {
+                    guard let prepared = try await self.streamSource(for: track), !Task.isCancelled else { return }
+                    source = prepared
+                } catch let refused as StreamRefused {
+                    // YouTube turned this URL away (a stale cache entry, or a fresh URL it just refused): get a new one, once.
+                    guard !Task.isCancelled else { return }
+                    self.log.notice("stream refused (HTTP \(refused.statusCode)); re-resolving")
+                    self.settings.streamCache.remove(forKey: key)
+                    guard let client = await self.service.readyClient() else { self.handle(YTDLPFailure.notInstalled); return }
+                    track = try await client.resolve(link)
+                    guard !Task.isCancelled else { return }
+                    self.settings.streamCache.store(track, forKey: key)
+                    guard let prepared = try await self.streamSource(for: track), !Task.isCancelled else { return }
+                    source = prepared
+                }
                 self.load(track, source: source, link: link, startAt: startAt, queueTarget: queueTarget)
             } catch {
                 self.handle(error)
@@ -318,13 +333,14 @@ final class PlayerEngine {
     /// What AVPlayer gets for `track`. A YouTube stream plays as HLS built from the file's segment index, so only what
     /// is about to play gets downloaded; without a usable index it goes through the chunked loader instead.
     /// - Returns: nil only if the task was cancelled meanwhile.
-    private func streamSource(for track: Track) async -> StreamSource? {
+    /// - Throws: `StreamRefused` when YouTube refuses the stream URL before anything is loaded.
+    private func streamSource(for track: Track) async throws -> StreamSource? {
         var options: [String: Any] = [:]
         if let userAgent = track.userAgent { options[AVURLAssetHTTPUserAgentKey] = userAgent }
         guard track.isYouTube else {
             return StreamSource(asset: AVURLAsset(url: track.streamURL, options: options), loader: nil)
         }
-        if let loader = await SegmentedStreamLoader.load(streamURL: track.streamURL, headers: track.httpHeaders) {
+        if let loader = try await SegmentedStreamLoader.load(streamURL: track.streamURL, headers: track.httpHeaders) {
             // Only the playlist goes through the loader; AVFoundation fetches the segments from YouTube itself.
             let asset = AVURLAsset(url: loader.assetURL, options: options)
             asset.resourceLoader.setDelegate(loader, queue: loader.queue)
@@ -332,7 +348,10 @@ final class PlayerEngine {
         }
         guard !Task.isCancelled else { return nil }
         // YouTube throttles AVPlayer's open-ended range requests; a long mix would never start.
-        let loader = ChunkedStreamLoader(streamURL: track.streamURL, headers: track.httpHeaders, fileExtension: track.streamExtension)
+        let loader = ChunkedStreamLoader(streamURL: track.streamURL, headers: track.httpHeaders, fileExtension: track.streamExtension) { [weak self] loader, refused in
+            let id = ObjectIdentifier(loader)
+            Task { @MainActor in self?.streamRefused(refused, by: id) }
+        }
         let asset = AVURLAsset(url: loader.assetURL)
         asset.resourceLoader.setDelegate(loader, queue: loader.queue)
         return StreamSource(asset: asset, loader: loader)
@@ -770,7 +789,17 @@ final class PlayerEngine {
         scheduleStateSync()
     }
 
+    /// The chunked loader's stream URL was refused mid-load. AVFoundation would wait on it forever, so treat it as
+    /// a failed item, unless that loader has since been replaced.
+    private func streamRefused(_ refused: StreamRefused, by loader: ObjectIdentifier) {
+        guard let current = streamLoader, ObjectIdentifier(current) == loader else { return }
+        itemFailed(refused)
+    }
+
     private func itemFailed(_ error: Error?) {
+        // A recovery (or another link) is already resolving: the same failure reported twice
+        // (refused fetch, then item status) must not spend the recovery budget twice.
+        guard !isResolving else { return }
         let description = error?.localizedDescription ?? "unknown error"
         log.error("item failed: \(description, privacy: .public)")
         if recoveryAttempts < Self.maxRecoveries, let link = currentLink {

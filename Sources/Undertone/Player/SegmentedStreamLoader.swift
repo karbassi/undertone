@@ -32,7 +32,8 @@ nonisolated final class SegmentedStreamLoader: NSObject, AVAssetResourceLoaderDe
     }
 
     /// Reads the stream's segment index and builds the playlist from it; nil if the stream has no index this can use.
-    static func load(streamURL: URL, headers: [String: String]) async -> SegmentedStreamLoader? {
+    /// - Throws: `StreamRefused` when YouTube turns the URL away. The chunked loader would only hit the same wall.
+    static func load(streamURL: URL, headers: [String: String]) async throws(StreamRefused) -> SegmentedStreamLoader? {
         let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.urlCache = nil
@@ -62,6 +63,9 @@ nonisolated final class SegmentedStreamLoader: NSObject, AVAssetResourceLoaderDe
                     wanted = min(indexByteLimit, max(needed, Int64(data.count) * 2))
                 }
             }
+        } catch let refused as StreamRefused {
+            log.error("stream refused (HTTP \(refused.statusCode)) while reading its segment index")
+            throw refused
         } catch {
             if !Task.isCancelled {
                 log.error("no segment index (\(String(describing: error), privacy: .public)); using the chunked loader")
@@ -76,7 +80,9 @@ nonisolated final class SegmentedStreamLoader: NSObject, AVAssetResourceLoaderDe
         for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 206 else { throw URLError(.badServerResponse) }
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if StreamRefused.isRefusal(http.statusCode) { throw StreamRefused(statusCode: http.statusCode) }
+        guard http.statusCode == 206 else { throw URLError(.badServerResponse) }
         return (data, ByteRange.total(fromContentRange: http.value(forHTTPHeaderField: "Content-Range")))
     }
 
