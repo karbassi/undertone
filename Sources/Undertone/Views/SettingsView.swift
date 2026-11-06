@@ -21,7 +21,6 @@ struct SettingsView: View {
                 Text("Settings")
                     .font(.system(size: 14, weight: .semibold))
                 Spacer()
-                IconButton(symbol: "power", help: "Quit Undertone") { NSApp.terminate(nil) }
             }
 
             section("Shortcuts") {
@@ -64,17 +63,14 @@ struct SettingsView: View {
 
             section("Audio cache") {
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(audioCacheLabel)
-                            .font(.caption)
-                        Text("Tracks you play are kept so replays need no download.")
-                            .font(.caption2).foregroundStyle(.tertiary)
-                    }
+                    Text(audioCacheLabel).font(.caption)
                     Spacer()
                     Button("Clear") { engine.clearAudioCache() }
                         .controlSize(.mini)
                         .disabled(engine.audioCacheBytes == 0)
                 }
+                Text("Tracks you play are kept so replays need no download.")
+                    .font(.caption2).foregroundStyle(.tertiary)
             }
 
             section("yt-dlp") {
@@ -97,7 +93,9 @@ struct SettingsView: View {
                         Button("Use default") { service.setOverride(nil) }
                     }
                     Spacer()
-                    Text(service.installCommand).font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                    if needsInstallCommand {
+                        Text(service.installCommand).font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
                 }
                 .controlSize(.mini)
             }
@@ -183,6 +181,14 @@ struct SettingsView: View {
         let cap = ByteCountFormatter.string(fromByteCount: engine.audioCache.capacity, countStyle: .file)
         guard engine.audioCacheBytes > 0 else { return "Empty (up to \(cap))" }
         return "\(ByteCountFormatter.string(fromByteCount: engine.audioCacheBytes, countStyle: .file)) of \(cap) used"
+    }
+
+    /// The brew command is the fix, so it shows only when there is something to fix.
+    private var needsInstallCommand: Bool {
+        switch service.status {
+        case .missing, .outdated, .broken: return true
+        case .ready, .checking: return false
+        }
     }
 
     private var toolSymbol: String {
