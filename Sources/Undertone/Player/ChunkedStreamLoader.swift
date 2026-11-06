@@ -39,10 +39,7 @@ nonisolated final class ChunkedStreamLoader: NSObject, AVAssetResourceLoaderDele
         self.headers = headers
         self.onRefused = onRefused
         contentType = fileExtension.flatMap { UTType(filenameExtension: $0)?.identifier } ?? UTType.mpeg4Movie.identifier
-        let config = URLSessionConfiguration.ephemeral
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        config.urlCache = nil
-        session = URLSession(configuration: config)
+        session = RangeFetch.makeSession()
         super.init()
     }
 
@@ -127,28 +124,11 @@ nonisolated final class ChunkedStreamLoader: NSObject, AVAssetResourceLoaderDele
         return known
     }
 
+    /// A refused URL throws `StreamRefused`, which `onRefused` turns into a re-resolve.
     private func fetch(from start: Int64, through end: Int64) async throws -> Data {
-        var request = URLRequest(url: streamURL)
-        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
-        request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        switch http.statusCode {
-        case 206:
-            if let total = ByteRange.total(fromContentRange: http.value(forHTTPHeaderField: "Content-Range")) {
-                state.withLock { $0.contentLength = total }
-            }
-            return data
-        case 200:
-            // The server ignored the range and sent the whole resource. Slicing it per chunk would
-            // re-download the entire stream on every request, so reject it instead.
-            throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Stream ignored the byte range (HTTP 200)"])
-        case let status where StreamRefused.isRefusal(status):
-            // The signed URL expired or was refused; `onRefused` gets the player to re-resolve it.
-            throw StreamRefused(statusCode: status)
-        default:
-            throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Stream returned HTTP \(http.statusCode)"])
-        }
+        let (data, total) = try await RangeFetch.fetch(streamURL, headers: headers, from: start, through: end, session: session)
+        if let total { state.withLock { $0.contentLength = total } }
+        return data
     }
 }
 

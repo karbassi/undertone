@@ -66,6 +66,21 @@ struct SettingsView: View {
                 }
             }
 
+            section("Audio cache") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(ByteCountFormatter.string(fromByteCount: engine.audioCacheBytes, countStyle: .file)) of \(ByteCountFormatter.string(fromByteCount: engine.audioCache.capacity, countStyle: .file))")
+                            .font(.caption)
+                        Text("Tracks you play are kept so replays need no download.")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                    Button("Clear") { engine.clearAudioCache() }
+                        .controlSize(.mini)
+                        .disabled(engine.audioCacheBytes == 0)
+                }
+            }
+
             section("yt-dlp") {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: toolSymbol).foregroundStyle(toolColor).padding(.top, 1)
@@ -102,7 +117,9 @@ struct SettingsView: View {
             }
         }
         .padding(16)
+        .onAppear { engine.refreshAudioCacheSize() }
         .onChange(of: state.showCount) { _, _ in
+            engine.refreshAudioCacheSize()
             launchAtLogin = LaunchAtLogin.isEnabled
             loginRequiresApproval = LaunchAtLogin.status == .requiresApproval
         }

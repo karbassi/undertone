@@ -26,6 +26,8 @@ final class PlayerEngine {
     private(set) var errorMessage: String?
     private(set) var errorSuggestion: String?
     private(set) var notice: String?
+    /// Bytes in the on-disk audio cache; refreshed after each download and by `refreshAudioCacheSize()`.
+    private(set) var audioCacheBytes: Int64 = 0
 
     var volume: Float {
         didSet {
@@ -57,7 +59,7 @@ final class PlayerEngine {
     }
 
     /// yt-dlp's duration wins: AVFoundation reports double the real length for a YouTube m4a opened as a file
-    /// (the chunked fallback). Played as HLS it gets the length right.
+    /// (the chunked fallback, or a file from the audio cache). Played as HLS it gets the length right.
     var duration: Double? {
         if let d = track?.duration, d > 0 { return d }
         guard let t = player.currentItem?.duration, t.isNumeric, t.seconds.isFinite, t.seconds > 0 else { return nil }
@@ -98,6 +100,14 @@ final class PlayerEngine {
     /// still reads the old time (or 0), so this stands in for it.
     @ObservationIgnored private var pendingSeekTarget: Double?
     @ObservationIgnored private var seekCount = 0
+    @ObservationIgnored let audioCache = AudioCache.standard(bundleIdentifier: Bundle.main.bundleIdentifier)
+    /// The background download filling `audioCache` for `downloadKey` (only ever the loaded track).
+    @ObservationIgnored private var downloadTask: Task<Void, Never>?
+    @ObservationIgnored private var downloadKey: String?
+    /// The loaded item plays from `audioCache` rather than the network.
+    @ObservationIgnored private var playingCachedFile = false
+    /// A track is downloaded for the cache only after it has been loaded this long, so a skipped track costs nothing.
+    static let audioCacheDelay: Duration = .seconds(20)
     /// Fires at each chapter start of the loaded item.
     @ObservationIgnored private var chapterObserver: Any?
     /// How often the position is saved while playing (it is also saved on every pause, seek and track change).
@@ -132,6 +142,71 @@ final class PlayerEngine {
         let interval = CMTime(seconds: Self.positionSaveInterval, preferredTimescale: 1)
         positionObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.savePosition() }
+        }
+
+        // No download is running yet, so leftovers from a quit mid-download can go.
+        let cache = audioCache
+        Task { [weak self] in
+            let bytes = await Self.sweep(cache)
+            self?.audioCacheBytes = bytes
+        }
+    }
+
+    @concurrent private static func sweep(_ cache: AudioCache) async -> Int64 {
+        cache.sweep()
+        cache.evict()
+        return cache.totalSize
+    }
+
+    @concurrent private static func measure(_ cache: AudioCache) async -> Int64 {
+        cache.totalSize
+    }
+
+    // MARK: - Audio cache
+
+    func refreshAudioCacheSize() {
+        let cache = audioCache
+        Task { [weak self] in
+            let bytes = await Self.measure(cache)
+            self?.audioCacheBytes = bytes
+        }
+    }
+
+    /// Empties the audio cache. A track playing from it keeps playing: the open file outlives its directory entry.
+    func clearAudioCache() {
+        downloadTask?.cancel()
+        downloadTask = nil
+        downloadKey = nil
+        audioCache.removeAll()
+        audioCacheBytes = 0
+    }
+
+    /// Downloads the loaded track into the audio cache once it has stayed loaded for `audioCacheDelay`.
+    private func scheduleAudioDownload(_ track: Track, key: String) {
+        if downloadKey == key, downloadTask != nil { return }   // already fetching this one (a reload or recovery)
+        downloadTask?.cancel()
+        downloadTask = nil
+        downloadKey = nil
+        guard track.isYouTube, !track.isExpired(margin: 15 * 60) else { return }
+        downloadKey = key
+        let cache = audioCache
+        downloadTask = Task { [weak self] in
+            defer {
+                if self?.downloadKey == key {
+                    self?.downloadTask = nil
+                    self?.downloadKey = nil
+                }
+            }
+            try? await Task.sleep(for: Self.audioCacheDelay)
+            guard !Task.isCancelled, !cache.contains(key) else { return }
+            do {
+                try await AudioDownloader.download(track, key: key, into: cache)
+                self?.refreshAudioCacheSize()
+            } catch is CancellationError {
+            } catch let error as URLError where error.code == .cancelled {
+            } catch {
+                self?.log.notice("audio cache download of \(key, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            }
         }
     }
 
@@ -282,6 +357,17 @@ final class PlayerEngine {
         let key = link.cacheKey
         pendingQueueTarget = queueTarget
 
+        // Played before and kept on disk: no yt-dlp, no segment index, no network.
+        if let hit = audioCache.entry(forKey: key) {
+            log.notice("audio cache hit \(key, privacy: .public)")
+            audioCache.touch(key)
+            var track = hit.track
+            track.expiresAt = nil   // the file does not expire, so Play must never re-resolve it
+            load(track, source: StreamSource(asset: AVURLAsset(url: hit.file), loader: nil),
+                 link: link, startAt: startAt, queueTarget: queueTarget, fromCache: true)
+            return
+        }
+
         let cached = settings.streamCache.track(forKey: key)
         if cached != nil { log.notice("cache hit \(key, privacy: .public)") }
         // A cache hit still waits on the network for its segment index, so it resolves visibly too: Cancel shows,
@@ -404,7 +490,7 @@ final class PlayerEngine {
         }
     }
 
-    private func load(_ track: Track, source: StreamSource, link: MediaLink, startAt: Double?, queueTarget: Int?) {
+    private func load(_ track: Track, source: StreamSource, link: MediaLink, startAt: Double?, queueTarget: Int?, fromCache: Bool = false) {
         if let current = currentLink, current.cacheKey != link.cacheKey { savePosition() }
         // An explicit start (a recovery, an idle reload, or a link's `t=` with no saved position) wins; nil picks up the saved position.
         let startAt = startAt ?? settings.positions[link.cacheKey]?.seconds
@@ -416,6 +502,7 @@ final class PlayerEngine {
             lastLoadedKey = link.cacheKey
         }
         currentLink = link
+        playingCachedFile = fromCache
         pendingQueueTarget = nil
         consecutiveQueueSkips = 0
         if let queueTarget, var q = queue {
@@ -449,6 +536,11 @@ final class PlayerEngine {
             settings.recent.record(url: pastedLink.resolvedURL, title: track.title)
         }
         prefetchNext()
+        if fromCache {
+            if downloadKey != link.cacheKey { downloadTask?.cancel(); downloadTask = nil; downloadKey = nil }
+        } else {
+            scheduleAudioDownload(track, key: link.cacheKey)
+        }
     }
 
     private func observe(_ item: AVPlayerItem) {
@@ -610,6 +702,7 @@ final class PlayerEngine {
         if hasEnded {
             hasEnded = false
             currentTime = 0
+            if replayFromAudioCache() { return }
             updateChapter(at: 0)
             player.seek(to: .zero)
         }
@@ -721,6 +814,10 @@ final class PlayerEngine {
         idleUnloadTask?.cancel()
         isIdleUnloaded = false
         failedWarmKeys.removeAll()
+        downloadTask?.cancel()
+        downloadTask = nil
+        downloadKey = nil
+        playingCachedFile = false
         teardownItem()
         player.pause()
         player.replaceCurrentItem(with: nil)
@@ -781,12 +878,21 @@ final class PlayerEngine {
     private func restartCurrentTrack() {
         hasEnded = false
         currentTime = 0
+        if replayFromAudioCache() { return }
         updateChapter(at: 0)
         player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         player.defaultRate = Float(speed.rawValue)
         player.play()
         seekGeneration += 1
         scheduleStateSync()
+    }
+
+    /// A streamed track that has since been downloaded starts over from the file rather than re-streaming
+    /// (repeat-one, or Play after it ended). False when it is not cached yet, or already plays from the cache.
+    private func replayFromAudioCache() -> Bool {
+        guard !playingCachedFile, let link = currentLink, audioCache.contains(link.cacheKey) else { return false }
+        resolveAndPlay(link, startAt: 0)
+        return true
     }
 
     /// The chunked loader's stream URL was refused mid-load. AVFoundation would wait on it forever, so treat it as
@@ -802,6 +908,12 @@ final class PlayerEngine {
         guard !isResolving else { return }
         let description = error?.localizedDescription ?? "unknown error"
         log.error("item failed: \(description, privacy: .public)")
+        if playingCachedFile, let link = currentLink {
+            // A cached file that will not play is dropped, recovery or not; otherwise every later play loads it again.
+            audioCache.remove(forKey: link.cacheKey)
+            playingCachedFile = false
+            refreshAudioCacheSize()
+        }
         if recoveryAttempts < Self.maxRecoveries, let link = currentLink {
             recoveryAttempts += 1
             settings.streamCache.remove(forKey: link.cacheKey)
