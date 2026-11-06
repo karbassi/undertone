@@ -23,9 +23,7 @@ Built for macOS 26 (Tahoe) with a real Liquid Glass panel you can tint to any co
 - **No ads, no video.** Audio-only; typically ~40 MB of memory while playing.
 - **Playback controls:** play/pause, back/forward 15 seconds, a scrubber, **1× / 1.5× / 2×** speed with the
   pitch preserved, **repeat** (off / all / one), and **volume** with a mute toggle.
-- **Instant replays.** Resolved streams are cached (they stay valid for hours), so replaying anything from
-  Recent starts immediately instead of waiting. The clipboard link is also resolved the moment you open the
-  panel, so pressing Play is instant.
+- **Instant replays, no re-download.** After a YouTube track has been loaded for 20 seconds, its audio is saved to disk in the background. Replaying it, repeating it, or opening it from Recent then plays straight from the file, with no yt-dlp and no network, even days later. The cache keeps up to 2 GB, drops the least recently played tracks first, and shows its size with a **Clear** button in Settings. The clipboard link is also resolved the moment you open the panel, so pressing Play is instant.
 - **Playlists:** paste a playlist link and it plays through, with next/previous. The next track is fetched ahead
   of time so changes are quick.
 - **Chapters:** in a video with YouTube chapters (a DJ mix, say), the panel, the menu bar title, and Now Playing show the chapter playing now. Next/previous skip between chapters, and the chapter menu jumps to any of them.
@@ -113,13 +111,14 @@ Percent-encode the `url` value (`&` becomes `%26`), or the link's own parameters
 1. You paste a link. Undertone classifies it (video / playlist / mix / other site).
 2. It runs `yt-dlp -j` to get the best audio-only stream (AAC in an MP4 container, which the native player can
    play), preferring the fast `visionos` client and falling back to yt-dlp's default clients.
-3. It plays that stream URL with `AVPlayer` — audio only, no video layer, no download. A YouTube stream is played as an HLS playlist built from the file's own segment index, so only the part about to play is fetched.
-4. It publishes the track to macOS so media keys, AirPods, and Control Center work, and it keeps the panel,
+3. It plays that stream URL with `AVPlayer` — audio only, no video layer. A YouTube stream is played as an HLS playlist built from the file's own segment index, so only the part about to play is fetched.
+4. If the track stays loaded for 20 seconds, the whole audio file is downloaded in the background (in bounded ranges YouTube serves at full speed) into `~/Library/Caches/com.jverissimo.undertone/Audio`. The next play of that track opens the file instead of the network.
+5. It publishes the track to macOS so media keys, AirPods, and Control Center work, and it keeps the panel,
    scrubber, and speed in sync.
 
-Nothing is downloaded to disk and no video is ever decoded. yt-dlp's reported duration is used for the progress
-bar because YouTube's audio streams report a misleading length to the player. Resolved stream URLs are cached
-until their expiry so replays skip yt-dlp entirely.
+No video is ever downloaded or decoded. yt-dlp's reported duration is used for the progress bar because YouTube's audio files report a misleading length to the player. Resolved stream URLs are cached until they expire, so a replay of a track that isn't saved to disk yet still skips yt-dlp.
+
+The trade-off of the audio cache: the first play of a track costs the stream plus the whole file (about 58 MB per hour of audio), even if you stop early. Tracks skipped within 20 seconds cost nothing extra, files over 512 MB are never cached, and every later play costs nothing. `brew uninstall --zap undertone` removes the cache along with the app.
 
 ### Performance
 
@@ -138,7 +137,7 @@ How it stays that way:
 - **No timers when you're not looking.** The progress clock runs only while the panel is open. With the
   panel closed nothing ticks and nothing re-renders; the app just plays audio.
 - **Deep idle.** After 10 minutes paused it releases the media pipeline entirely (no buffering, no wake-ups).
-  Pressing Play rebuilds it from the stream cache, instantly. Tune with
+  Pressing Play rebuilds it from the audio or stream cache, instantly. Tune with
   `defaults write com.jverissimo.undertone idleUnloadSeconds -float 300`.
 - **Nothing spawned at launch.** yt-dlp is located and version-checked once, then that result is reused for
   24 hours (validated cheaply), so launching, including at login, starts no processes. Recheck forces a probe.
