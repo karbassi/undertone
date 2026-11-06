@@ -35,12 +35,8 @@ struct SettingsView: View {
             }
 
             section("General") {
-                Toggle("Show track title in the menu bar", isOn: $settings.showTitleInMenuBar)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
+                toggleRow("Show track title in the menu bar", isOn: $settings.showTitleInMenuBar)
+                toggleRow("Launch at login", isOn: $launchAtLogin)
                     .disabled(!LaunchAtLogin.isAvailable)
                     .onChange(of: launchAtLogin) { _, enabled in
                         guard enabled != LaunchAtLogin.isEnabled else { return }
@@ -133,6 +129,18 @@ struct SettingsView: View {
                 .foregroundStyle(.tertiary)
                 .kerning(0.5)
             content()
+        }
+    }
+
+    /// Label left in the row font, switch right-aligned: the System Settings layout, lined up with the shortcut rows.
+    private func toggleRow(_ label: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(label).font(.caption)
+            Spacer()
+            Toggle(label, isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
         }
     }
 
