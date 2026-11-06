@@ -34,18 +34,14 @@ nonisolated final class SegmentedStreamLoader: NSObject, AVAssetResourceLoaderDe
     /// Reads the stream's segment index and builds the playlist from it; nil if the stream has no index this can use.
     /// - Throws: `StreamRefused` when YouTube turns the URL away. The chunked loader would only hit the same wall.
     static func load(streamURL: URL, headers: [String: String]) async throws(StreamRefused) -> SegmentedStreamLoader? {
-        let config = URLSessionConfiguration.ephemeral
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        config.urlCache = nil
-        config.timeoutIntervalForRequest = 10
-        let session = URLSession(configuration: config)
+        let session = RangeFetch.makeSession(timeout: 10)
         defer { session.finishTasksAndInvalidate() }
 
         var data = Data()
         var wanted = initialFetch
         do {
             while true {
-                let (chunk, total) = try await fetch(streamURL, headers: headers, from: Int64(data.count), through: wanted - 1, session: session)
+                let (chunk, total) = try await RangeFetch.fetch(streamURL, headers: headers, from: Int64(data.count), through: wanted - 1, session: session)
                 guard !chunk.isEmpty else { throw URLError(.zeroByteResource) }
                 data.append(chunk)
                 switch try SegmentIndex.parse(data) {
@@ -72,18 +68,6 @@ nonisolated final class SegmentedStreamLoader: NSObject, AVAssetResourceLoaderDe
             }
             return nil
         }
-    }
-
-    /// A bounded range of the stream, plus the stream's total size from `Content-Range`.
-    private static func fetch(_ url: URL, headers: [String: String], from start: Int64, through end: Int64, session: URLSession) async throws -> (Data, Int64?) {
-        var request = URLRequest(url: url)
-        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
-        request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        if StreamRefused.isRefusal(http.statusCode) { throw StreamRefused(statusCode: http.statusCode) }
-        guard http.statusCode == 206 else { throw URLError(.badServerResponse) }
-        return (data, ByteRange.total(fromContentRange: http.value(forHTTPHeaderField: "Content-Range")))
     }
 
     // MARK: - AVAssetResourceLoaderDelegate
