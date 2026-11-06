@@ -23,16 +23,26 @@ jobs:
 
       - uses: jdx/mise-action@v2
 
-      - uses: actions/cache@v4
+      # Build products only fit the compiler that made them, so the toolchain is part of the key. The source hash
+      # gives every change its own entry; restore-keys falls back to the newest one, and SwiftPM rebuilds only what
+      # differs (about 9 s warm vs 58 s cold, even though checkout gives every file a fresh mtime).
+      - name: Cache key
+        id: key
+        run: |
+          swift --version
+          echo "toolchain=$(swift --version 2>&1 | shasum -a 256 | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore build cache
+        id: cache
+        uses: actions/cache/restore@v4
         with:
           path: .build
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Vendor/**') }}
-          restore-keys: spm-${{ runner.os }}-
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ steps.key.outputs.toolchain }}-${{ hashFiles('Package.swift', 'Sources/**', 'Vendor/**') }}
+          restore-keys: spm-${{ runner.os }}-${{ runner.arch }}-${{ steps.key.outputs.toolchain }}-
 
       - name: Build
         run: |
           set -o pipefail
-          swift --version
           swift build --product Undertone 2>&1 | tee build.log
           # Vendored code is not ours to fix; any other warning fails the build.
           if grep -E "warning: " build.log | grep -v Vendor; then
@@ -42,3 +52,12 @@ jobs:
 
       - name: Test
         run: mise run test
+
+      # Only pushes to personal save. PR runs can read personal's caches but not each other's, so a cache saved
+      # from a PR would only take up space (about 90 MB each, against the repo's 10 GB limit).
+      - name: Save build cache
+        if: github.event_name == 'push' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .build
+          key: ${{ steps.cache.outputs.cache-primary-key }}
