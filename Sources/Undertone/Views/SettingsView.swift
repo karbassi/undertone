@@ -107,8 +107,9 @@ struct SettingsView: View {
             }
 
             HStack {
-                Text("Undertone \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
+                Text(versionLabel)
                     .font(.caption2).foregroundStyle(.tertiary)
+                    .textSelection(.enabled)
                 Spacer()
                 Button(role: .destructive) { NSApp.terminate(nil) } label: {
                     Label("Quit Undertone", systemImage: "power")
@@ -159,6 +160,14 @@ struct SettingsView: View {
                 service.setOverride(url.path)
             }
         }
+    }
+
+    /// "Undertone 0.4.0 (183)": the build number (the commit count, from bundle.sh) tells two builds of one version apart.
+    private var versionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "dev"
+        guard let build = info?["CFBundleVersion"] as? String, !build.isEmpty else { return "Undertone \(version)" }
+        return "Undertone \(version) (\(build))"
     }
 
     private var toolSymbol: String {
