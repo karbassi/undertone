@@ -20,9 +20,7 @@ struct PanelRoot: View {
         }
         // The window is sized to the page; pinning it to the top keeps any transient mismatch at the bottom.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(blurTint)
         .clipShape(.rect(cornerRadius: PanelController.cornerRadius))
-        .tint(tint)
         .environment(engine)
         .environment(settings)
         .environment(service)
@@ -42,17 +40,6 @@ struct PanelRoot: View {
             proxy.size
         } action: { size in
             state.controller?.contentSizeChanged(size)
-        }
-    }
-
-    private var tint: Color? {
-        settings.tintHex.flatMap(Color.init(hex:))
-    }
-
-    /// The blur fallback has no tintColor of its own, so the tint is painted here instead.
-    @ViewBuilder private var blurTint: some View {
-        if settings.backdrop == .blur, let tint {
-            tint.opacity(settings.tintOpacity * 0.35)
         }
     }
 }
