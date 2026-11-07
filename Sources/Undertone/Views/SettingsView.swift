@@ -19,7 +19,7 @@ struct SettingsView: View {
             HStack(spacing: 8) {
                 IconButton(symbol: "chevron.left", help: "Back") { state.showSettings(false) }
                 Text("Settings")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.headline)
                 Spacer()
             }
 
@@ -30,7 +30,7 @@ struct SettingsView: View {
                 shortcutRow("Next track", .nextTrack)
                 shortcutRow("Previous track", .previousTrack)
                 Text("Media keys and the Now Playing widget work without any setup.")
-                    .font(.caption2).foregroundStyle(.tertiary)
+                    .font(.caption2).foregroundStyle(.secondary)
             }
 
             section("General") {
@@ -49,9 +49,9 @@ struct SettingsView: View {
                         }
                     }
                 if !LaunchAtLogin.isAvailable {
-                    Text("Run the built app (mise run install) to enable this.").font(.caption2).foregroundStyle(.tertiary)
+                    Text("Run the built app (mise run install) to enable this.").font(.caption2).foregroundStyle(.secondary)
                 } else if !LaunchAtLogin.isInApplications {
-                    Text("Tip: install to /Applications first so the login item survives rebuilds.").font(.caption2).foregroundStyle(.tertiary)
+                    Text("Tip: install to /Applications first so the login item survives rebuilds.").font(.caption2).foregroundStyle(.secondary)
                 }
                 if loginRequiresApproval {
                     Button("Approve in System Settings…") { LaunchAtLogin.openSystemSettings() }.controlSize(.small)
@@ -63,14 +63,14 @@ struct SettingsView: View {
 
             section("Audio cache") {
                 HStack {
-                    Text(audioCacheLabel).font(.caption)
+                    Text(audioCacheLabel)
                     Spacer()
                     Button("Clear") { engine.clearAudioCache() }
                         .controlSize(.small)
                         .disabled(engine.audioCacheBytes == 0)
                 }
                 Text("Tracks you play are kept so replays need no download.")
-                    .font(.caption2).foregroundStyle(.tertiary)
+                    .font(.caption2).foregroundStyle(.secondary)
             }
 
             section("yt-dlp") {
@@ -79,10 +79,10 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(toolTitle).font(.caption).fixedSize(horizontal: false, vertical: true)
                         if let path = service.executable?.path {
-                            Text(path).font(.caption2.monospaced()).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                            Text(path).font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                         }
                         Text(service.jsRuntime.map { "deno: \($0.path)" } ?? "deno not found (YouTube needs it: brew install deno)")
-                            .font(.caption2.monospaced()).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                            .font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
                     Spacer(minLength: 0)
                 }
@@ -90,7 +90,7 @@ struct SettingsView: View {
                     Button("Recheck") { service.recheck() }
                     Button("Choose…") { choosePath() }
                     if settings.ytdlpPathOverride != nil {
-                        Button("Use default") { service.setOverride(nil) }
+                        Button("Use Default") { service.setOverride(nil) }
                     }
                     Spacer()
                     if needsInstallCommand {
@@ -102,7 +102,7 @@ struct SettingsView: View {
 
             HStack {
                 Text(versionLabel)
-                    .font(.caption2).foregroundStyle(.tertiary)
+                    .font(.caption2).foregroundStyle(.secondary)
                     .textSelection(.enabled)
                 Spacer()
                 Button(role: .destructive) { NSApp.terminate(nil) } label: {
@@ -133,7 +133,7 @@ struct SettingsView: View {
     /// Label left in the row font, switch right-aligned: the System Settings layout, lined up with the shortcut rows.
     private func toggleRow(_ label: String, isOn: Binding<Bool>) -> some View {
         HStack {
-            Text(label).font(.caption)
+            Text(label)
             Spacer()
             Toggle(label, isOn: isOn)
                 .labelsHidden()
@@ -144,7 +144,7 @@ struct SettingsView: View {
 
     private func shortcutRow(_ label: String, _ name: KeyboardShortcuts.Name) -> some View {
         HStack {
-            Text(label).font(.caption)
+            Text(label)
             Spacer()
             KeyboardShortcuts.Recorder(for: name)
                 .controlSize(.small)
@@ -204,7 +204,7 @@ struct SettingsView: View {
         switch service.status {
         case .ready: return .green
         case .checking: return .secondary
-        case .outdated: return .yellow
+        case .outdated: return .orange   // yellow is unreadable on light glass
         case .missing, .broken: return .orange
         }
     }
