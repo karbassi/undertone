@@ -54,8 +54,12 @@ struct MainView: View {
     }
 }
 
-/// Small borderless symbol button used in headers.
+/// Small borderless symbol button. Its sizes are shared by every icon-only control in the panel (the link-bar menus,
+/// the star, the chapter menu) so they all line up.
 struct IconButton: View {
+    static let side: CGFloat = 24
+    static let symbolSize: CGFloat = 13
+
     let symbol: String
     let help: String
     let action: () -> Void
@@ -63,8 +67,8 @@ struct IconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .frame(width: 26, height: 26)
+                .font(.system(size: Self.symbolSize, weight: .medium))
+                .frame(width: Self.side, height: Self.side)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

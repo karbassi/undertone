@@ -14,7 +14,7 @@ import Testing
         #expect(track.streamURL.host() == "rr3---sn-h5qzen7s.googlevideo.com")
         #expect(track.userAgent?.hasPrefix("Mozilla/5.0") == true)
         #expect(track.isYouTube)
-        #expect(track.artworkURL?.absoluteString == "https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg")
+        #expect(track.artworkURL?.absoluteString == "https://i.ytimg.com/vi/aqz-KE-bpKQ/mqdefault.jpg")
         #expect(track.expiresAt == Date(timeIntervalSince1970: 1788564066))
     }
 
