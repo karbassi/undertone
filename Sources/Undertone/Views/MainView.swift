@@ -18,7 +18,8 @@ struct MainView: View {
                 Scrubber()
                 TransportBar()
                 SecondaryControls()
-            } else {
+            } else if engine.errorMessage == nil {
+                // The error's own suggestion replaces the hint, so the two don't both say "paste a link".
                 EmptyHint()
             }
             if let notice = engine.notice {

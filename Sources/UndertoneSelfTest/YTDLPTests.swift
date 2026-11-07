@@ -218,7 +218,7 @@ final class FakeRunner: ProcessRunning, @unchecked Sendable {
         #expect(TimeFormat.clock(3723) == "1:02:03")
         #expect(TimeFormat.clock(.nan) == "--:--")
         #expect(TimeFormat.clock(-1) == "--:--")
-        #expect(TimeFormat.remaining(10, of: 211) == "-3:21")
+        #expect(TimeFormat.remaining(10, of: 211) == "\u{2212}3:21")
         #expect(TimeFormat.remaining(10, of: 0) == "--:--")
     }
 

@@ -11,9 +11,9 @@ public enum TimeFormat {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
-    /// "-3:21" style remaining time.
+    /// "−3:21" style remaining time, with a real minus sign (U+2212) as Music and QuickTime use, not a hyphen.
     public static func remaining(_ current: Double, of duration: Double) -> String {
         guard duration.isFinite, duration > 0 else { return "--:--" }
-        return "-" + clock(max(0, duration - current))
+        return "\u{2212}" + clock(max(0, duration - current))
     }
 }
