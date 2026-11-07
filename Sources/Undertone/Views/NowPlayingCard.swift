@@ -56,9 +56,9 @@ struct NowPlayingCard: View {
                 }
                 Button { engine.toggleSavedTrack() } label: {
                     Image(systemName: engine.isTrackSaved ? "star.fill" : "star")
-                        .font(.system(size: 14))
+                        .font(.system(size: IconButton.symbolSize, weight: .medium))
                         .foregroundStyle(engine.isTrackSaved ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                        .frame(width: 24, height: 24)
+                        .frame(width: IconButton.side, height: IconButton.side)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -82,9 +82,9 @@ struct ChapterMenu: View {
             }
         } label: {
             Image(systemName: "list.bullet")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: IconButton.symbolSize, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
+                .frame(width: IconButton.side, height: IconButton.side)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)

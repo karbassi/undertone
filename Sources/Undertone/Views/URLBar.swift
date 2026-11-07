@@ -15,7 +15,7 @@ struct URLBar: View {
             Image(systemName: "link")
                 .foregroundStyle(.secondary)
                 .font(.system(size: 12))
-            TextField("Paste a YouTube link", text: $state.urlText)
+            TextField("Paste a link",text: $state.urlText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused($focused)
@@ -91,9 +91,9 @@ struct RecentLinksMenu: View {
             }
         } label: {
             Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: IconButton.symbolSize, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
+                .frame(width: IconButton.side, height: IconButton.side)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -138,9 +138,9 @@ struct SavedLinksMenu: View {
             }
         } label: {
             Image(systemName: "list.star")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: IconButton.symbolSize, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
+                .frame(width: IconButton.side, height: IconButton.side)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)

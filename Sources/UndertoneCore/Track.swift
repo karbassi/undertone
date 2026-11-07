@@ -63,9 +63,10 @@ public struct Track: Equatable, Sendable, Identifiable, Codable {
 
     public var isYouTube: Bool { extractor?.lowercased().hasPrefix("youtube") ?? false }
 
-    /// Stable JPEG artwork for YouTube (webp maxres thumbnails are flaky); the site thumbnail otherwise.
+    /// Stable JPEG artwork for YouTube (webp maxres thumbnails are flaky); the site thumbnail otherwise. mqdefault is
+    /// 16:9 with no bars: hqdefault is 4:3 with black bars baked in, which show above and below a square crop.
     public var artworkURL: URL? {
-        isYouTube ? URL(string: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg") : thumbnailURL
+        isYouTube ? URL(string: "https://i.ytimg.com/vi/\(id)/mqdefault.jpg") : thumbnailURL
     }
 
     public func isExpired(at now: Date = Date(), margin: TimeInterval = 120) -> Bool {

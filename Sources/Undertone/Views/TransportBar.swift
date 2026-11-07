@@ -86,16 +86,16 @@ struct RepeatButton: View {
     @Environment(PlayerEngine.self) private var engine
 
     var body: some View {
+        // A bordered small button: the same height and chrome as the small segmented speed control beside it.
         Button {
             engine.cycleRepeatMode()
         } label: {
             Image(systemName: engine.repeatMode.symbolName)
-                .font(.system(size: 13, weight: .medium))
-                .frame(width: 26, height: 22)
-                .background(engine.repeatMode.isOn ? Color.primary.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(Rectangle())
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 16)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
         .foregroundStyle(engine.repeatMode.isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
         .help(engine.repeatMode.label)
     }
