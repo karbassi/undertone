@@ -10,6 +10,7 @@ struct NowPlayingCard: View {
             ArtworkView(url: engine.track?.artworkURL, isResolving: engine.isResolving)
                 .frame(width: 56, height: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)   // decorative: the title beside it says what is playing
             VStack(alignment: .leading, spacing: 3) {
                 if engine.isResolving {
                     Text(engine.resolvingTitle ?? "Resolving…")
@@ -65,6 +66,8 @@ struct NowPlayingCard: View {
                 }
                 .buttonStyle(.plain)
                 .help(engine.isTrackSaved ? "Remove this track from saved links" : "Save this track")
+                .accessibilityLabel("Save Track")
+                .accessibilityAddTraits(engine.isTrackSaved ? .isSelected : [])
             }
         }
     }
@@ -93,6 +96,7 @@ struct ChapterMenu: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Chapters")
+        .accessibilityLabel("Chapters")
     }
 }
 

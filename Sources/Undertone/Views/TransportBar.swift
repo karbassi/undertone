@@ -23,6 +23,7 @@ struct TransportBar: View {
             }
             .buttonStyle(.plain)
             .help(engine.isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
             TransportButton(symbol: "goforward.15", size: 19, help: "Forward 15 seconds") { engine.skip(by: 15) }
             if engine.queue != nil || engine.skipsByChapter {
                 TransportButton(symbol: "forward.end.fill", size: 15, help: engine.skipsByChapter ? "Next chapter" : "Next") { engine.next() }
@@ -50,6 +51,7 @@ struct TransportButton: View {
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 
@@ -86,7 +88,22 @@ struct RepeatButton: View {
     @Environment(PlayerEngine.self) private var engine
 
     var body: some View {
-        // A bordered small button: the same height and chrome as the small segmented speed control beside it.
+        // A small button, the same height as the small segmented speed control beside it. On is filled, not just
+        // tinted, so off and repeat-all differ without relying on colour (they share the "repeat" symbol).
+        Group {
+            if engine.repeatMode.isOn {
+                button.buttonStyle(.borderedProminent)
+            } else {
+                button.buttonStyle(.bordered).foregroundStyle(.secondary)
+            }
+        }
+        .controlSize(.small)
+        .help(engine.repeatMode.label)
+        .accessibilityLabel("Repeat")
+        .accessibilityValue(engine.repeatMode.accessibilityValue)
+    }
+
+    private var button: some View {
         Button {
             engine.cycleRepeatMode()
         } label: {
@@ -94,10 +111,6 @@ struct RepeatButton: View {
                 .font(.system(size: 11, weight: .semibold))
                 .frame(width: 16)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .foregroundStyle(engine.repeatMode.isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-        .help(engine.repeatMode.label)
     }
 }
 
@@ -117,10 +130,13 @@ struct VolumeControl: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .help(engine.isMuted ? "Unmute" : "Mute")
+            .accessibilityLabel(engine.isMuted ? "Unmute" : "Mute")
             Slider(value: Binding(get: { Double(engine.effectiveVolume) }, set: { engine.setVolume(Float($0)) }), in: 0...1)
                 .controlSize(.mini)
                 .frame(width: 70)
                 .help("Volume (or scroll over the menu bar icon)")
+                .accessibilityLabel("Volume")
+                .accessibilityValue(engine.isMuted ? "Muted" : "\(Int((engine.volume * 100).rounded())) percent")
         }
     }
 }

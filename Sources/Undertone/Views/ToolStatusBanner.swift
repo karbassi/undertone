@@ -36,6 +36,7 @@ struct ToolStatusBanner: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
                         .help("Copy command")
+                        .accessibilityLabel("Copy Command")
                         Spacer()
                         Button("Recheck") { service.recheck() }
                             .controlSize(.mini)

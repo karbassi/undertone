@@ -7,15 +7,16 @@ struct PanelRoot: View {
     let settings: AppSettings
     let service: YTDLPService
     let state: PanelState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack(alignment: .top) {
             if state.showingSettings {
                 page { SettingsView() }
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(pageTransition(from: .trailing))
             } else {
                 page { MainView() }
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .transition(pageTransition(from: .leading))
             }
         }
         // The window is sized to the page; pinning it to the top keeps any transient mismatch at the bottom.
@@ -25,6 +26,11 @@ struct PanelRoot: View {
         .environment(settings)
         .environment(service)
         .environment(state)
+    }
+
+    /// Pages slide in from the side; with Reduce Motion they only cross-fade.
+    private func pageTransition(from edge: Edge) -> AnyTransition {
+        reduceMotion ? .opacity : .move(edge: edge).combined(with: .opacity)
     }
 
     /// A page takes its natural height up to what fits on the screen, scrolls beyond that, and reports its size.

@@ -250,6 +250,10 @@ final class PanelController {
         frameAnimation?.invalidate()
         let start = panel.frame
         guard start != target else { return }
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            setPanelFrame(target)
+            return
+        }
         let duration: TimeInterval = 0.16
         let began = CACurrentMediaTime()
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
@@ -411,18 +415,32 @@ final class PanelController {
         spaceObserver = nil
     }
 
-    /// Esc closes; ⌘Q quits; ⌘V/⌘C/⌘X/⌘A/⌘Z reach the focused text field even though the app is not active.
+    /// Esc goes back from Settings, else closes; Space plays/pauses; ←/→ skip 15 s; ↑/↓ change volume; ⌘Q quits;
+    /// ⌘V/⌘C/⌘X/⌘A/⌘Z reach the focused text field even though the app is not active.
     private func handleKey(_ event: NSEvent) -> NSEvent? {
         guard event.window == panel else { return event }
         if event.keyCode == 53 {
-            hide()
+            if state.showingSettings { state.showSettings(false) } else { hide() }
             return nil
         }
-        // Space toggles playback, but never while typing in a text field.
-        if event.keyCode == 49, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
-           !(panel.firstResponder is NSTextView) {
-            engine.togglePlayPause()
-            return nil
+        // The playback keys never apply while typing in a text field, and stay off with Full Keyboard Access, where
+        // Space presses the focused control and the arrows move within it.
+        let plain = event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty
+        if plain, !(panel.firstResponder is NSTextView), !NSApp.isFullKeyboardAccessEnabled, !isRecorderFocused {
+            switch event.keyCode {
+            case 49:
+                engine.togglePlayPause()
+                return nil
+            case 123 where !state.showingSettings && engine.track != nil,
+                 124 where !state.showingSettings && engine.track != nil:
+                engine.skip(by: event.keyCode == 123 ? -15 : 15)
+                return nil
+            case 125 where !state.showingSettings, 126 where !state.showingSettings:
+                engine.setVolume(min(1, max(0, engine.volume + (event.keyCode == 126 ? 0.1 : -0.1))))
+                return nil
+            default:
+                break
+            }
         }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard flags == .command || flags == [.command, .shift], let key = event.charactersIgnoringModifiers?.lowercased() else { return event }

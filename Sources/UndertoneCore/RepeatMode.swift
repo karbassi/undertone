@@ -20,5 +20,14 @@ public enum RepeatMode: String, CaseIterable, Sendable, Codable {
         }
     }
 
+    /// What VoiceOver reads after "Repeat".
+    public var accessibilityValue: String {
+        switch self {
+        case .off: return "Off"
+        case .all: return "All"
+        case .one: return "One"
+        }
+    }
+
     public var symbolName: String { self == .one ? "repeat.1" : "repeat" }
 }
