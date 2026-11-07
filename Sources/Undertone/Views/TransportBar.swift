@@ -124,7 +124,7 @@ struct VolumeControl: View {
             } label: {
                 Image(systemName: engine.volumeSymbol)
                     .font(.system(size: 11, weight: .medium))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

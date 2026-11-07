@@ -14,7 +14,7 @@ struct NowPlayingCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 if engine.isResolving {
                     Text(engine.resolvingTitle ?? "Resolving…")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.headline)
                         .lineLimit(2)
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini)
@@ -29,7 +29,7 @@ struct NowPlayingCard: View {
                 } else if let track = engine.track {
                     // One line when a chapter line follows, so the text stays about as tall as the artwork.
                     Text(track.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.headline)
                         .lineLimit(engine.chapter == nil ? 2 : 1)
                         .help(track.title)
                     if let chapter = engine.chapter {
@@ -48,7 +48,7 @@ struct NowPlayingCard: View {
                 if let queue = engine.queue {
                     Text("\(queue.position) / \(queue.count)\(queue.title.map { " · \($0)" } ?? "")")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
@@ -109,7 +109,7 @@ struct ArtworkView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.primary.opacity(0.08))
+                .fill(.fill.secondary)
             if let image {
                 Image(nsImage: image)
                     .resizable()

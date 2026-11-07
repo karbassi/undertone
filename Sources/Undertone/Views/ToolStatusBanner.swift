@@ -32,6 +32,8 @@ struct ToolStatusBanner: View {
                             NSPasteboard.general.setString(service.installCommand, forType: .string)
                         } label: {
                             Image(systemName: "doc.on.doc")
+                                .frame(width: IconButton.side, height: IconButton.side)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
@@ -39,14 +41,14 @@ struct ToolStatusBanner: View {
                         .accessibilityLabel("Copy Command")
                         Spacer()
                         Button("Recheck") { service.recheck() }
-                            .controlSize(.mini)
+                            .controlSize(.small)
                     }
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        .padding(RowBackground.padding)
+        .rowBackground()
     }
 
     private var symbol: String {
@@ -61,7 +63,7 @@ struct ToolStatusBanner: View {
     private var color: Color {
         switch service.status {
         case .checking, .ready: return .secondary
-        case .outdated: return .yellow
+        case .outdated: return .orange   // yellow is unreadable on light glass
         case .missing, .broken: return .orange
         }
     }

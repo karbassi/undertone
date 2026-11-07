@@ -16,9 +16,9 @@ struct URLBar: View {
                 .foregroundStyle(.secondary)
                 .font(.system(size: 12))
                 .accessibilityHidden(true)
-            TextField("Paste a link",text: $state.urlText)
+            TextField("Paste a link", text: $state.urlText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .font(.body)
                 .focused($focused)
                 .onSubmit(submit)
             if !state.urlText.isEmpty {
@@ -27,6 +27,8 @@ struct URLBar: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.tertiary)
+                        .frame(width: 20, height: IconButton.side)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("Clear")
@@ -44,10 +46,11 @@ struct URLBar: View {
             .disabled(!service.status.isUsable)
             .help(state.urlText.isEmpty ? "Play the link on the clipboard" : "Play this link")
         }
-        .padding(.leading, 10)
+        // Tighter than RowBackground.padding on the right and vertically: the button and icons carry their own inset.
+        .padding(.leading, RowBackground.padding)
         .padding(.trailing, 6)
         .padding(.vertical, 6)
-        .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+        .rowBackground()
         .onChange(of: state.showCount, initial: true) { _, _ in
             if engine.track == nil && !engine.isResolving { focused = true }
         }

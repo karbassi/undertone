@@ -73,6 +73,7 @@ final class StatusItemController: NSObject {
     private func showMenu() {
         panel.hide()
         let menu = NSMenu()
+        menu.autoenablesItems = false   // otherwise AppKit ignores the isEnabled set below
         if let track = engine.track {
             let title = NSMenuItem(title: track.title, action: nil, keyEquivalent: "")
             title.isEnabled = false
@@ -83,9 +84,16 @@ final class StatusItemController: NSObject {
         playPause.target = self
         playPause.isEnabled = engine.track != nil || settings.lastLink != nil
         menu.addItem(playPause)
-        if engine.hasNext {
-            let next = NSMenuItem(title: engine.skipsByChapter ? "Next Chapter" : "Next", action: #selector(nextTrack), keyEquivalent: "")
+        // Same rule as the panel's previous button: enabled with somewhere to go back to, or to restart the current one.
+        if engine.queue != nil || engine.skipsByChapter {
+            let noun = engine.skipsByChapter ? "Chapter" : "Track"
+            let previous = NSMenuItem(title: "Previous \(noun)", action: #selector(previousTrack), keyEquivalent: "")
+            previous.target = self
+            previous.isEnabled = engine.hasPrevious || engine.currentTime >= 3
+            menu.addItem(previous)
+            let next = NSMenuItem(title: "Next \(noun)", action: #selector(nextTrack), keyEquivalent: "")
             next.target = self
+            next.isEnabled = engine.hasNext
             menu.addItem(next)
         }
         let open = NSMenuItem(title: "Open Undertone", action: #selector(openPanel), keyEquivalent: "")
@@ -101,6 +109,7 @@ final class StatusItemController: NSObject {
 
     @objc private func togglePlayPause() { engine.togglePlayPause() }
     @objc private func nextTrack() { engine.next() }
+    @objc private func previousTrack() { engine.previous() }
     @objc private func openPanel() { panel.show() }
 
     private func observe() {
@@ -147,6 +156,14 @@ final class StatusItemController: NSObject {
         if statusItem.button?.title != newTitle {
             statusItem.button?.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
             statusItem.button?.title = newTitle
+        }
+        // The tooltip and VoiceOver get the full, untruncated title and the state the icon shows.
+        let playing = engine.chapter?.title ?? engine.track?.title
+        let state = engine.isResolving ? "Loading" : engine.isPlaying ? "Playing" : engine.track != nil ? "Paused" : nil
+        let description = ["Undertone", state, playing].compactMap { $0 }.joined(separator: ", ")
+        if statusItem.button?.toolTip != description {
+            statusItem.button?.toolTip = description
+            statusItem.button?.setAccessibilityLabel(description)
         }
     }
 

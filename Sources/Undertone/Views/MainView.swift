@@ -44,7 +44,7 @@ struct MainView: View {
                 .foregroundStyle(.tint)
                 .accessibilityHidden(true)
             Text("Undertone")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.headline)
             Spacer()
             IconButton(symbol: "gearshape", help: "Settings") {
                 state.showSettings(true)
@@ -87,13 +87,14 @@ struct EmptyHint: View {
             Image(systemName: "music.note.list")
                 .font(.system(size: 26, weight: .light))
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
             Text("Paste a YouTube link to listen in the background.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Text("Videos, playlists, and most sites yt-dlp knows.")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity)
@@ -111,6 +112,8 @@ struct MessageRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
+                // Multicolor draws the system yellow triangle with a dark mark, readable on light and dark glass.
+                .symbolRenderingMode(tone == .yellow ? .multicolor : .monochrome)
                 .foregroundStyle(tone == .yellow ? AnyShapeStyle(.yellow) : AnyShapeStyle(.secondary))
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 2) {
@@ -129,7 +132,28 @@ struct MessageRow: View {
             IconButton(symbol: "xmark", help: "Dismiss", action: dismiss)
                 .controlSize(.small)
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        .padding(RowBackground.padding)
+        .rowBackground()
     }
+}
+
+/// The surface behind full-width rows (link bar, messages, banner): one radius and padding, and semantic fills so it
+/// stays visible on light glass and gains an outline with Increase Contrast.
+struct RowBackground: ViewModifier {
+    static let radius: CGFloat = 12
+    static let padding: CGFloat = 10
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Self.radius)
+        content
+            .background(.fill.tertiary, in: shape)
+            .overlay {
+                if contrast == .increased { shape.strokeBorder(.separator) }
+            }
+    }
+}
+
+extension View {
+    func rowBackground() -> some View { modifier(RowBackground()) }
 }

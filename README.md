@@ -15,7 +15,7 @@ audio-only stream through the native macOS player, so there is no video decoding
 watch. It skips ads by never loading them: it plays the raw audio track directly, the same one AirPods and the
 Control Center Now Playing widget see.
 
-Built for macOS 26 (Tahoe) with a real Liquid Glass panel you can tint to any colour.
+Built for macOS 26 (Tahoe) with a real Liquid Glass panel that follows light and dark mode and the accessibility display settings.
 
 ## Features
 
@@ -36,8 +36,8 @@ Built for macOS 26 (Tahoe) with a real Liquid Glass panel you can tint to any co
 - **Recent links:** the last ten things you played, one click to replay.
 - **Volume from the menu bar:** scroll over the icon to change volume; optionally show the track title next to
   the icon.
-- **Liquid Glass, your colour:** pick a tint and glass style; the whole panel is one tinted glass surface.
-  **Reset to default** in Settings brings back the blue glass it ships with.
+- **Liquid Glass:** the whole panel is one stock glass surface that follows light and dark mode, Increase Contrast, Reduce Transparency, and Reduce Motion.
+- **Keyboard and VoiceOver:** with the panel open, Space plays or pauses, ←/→ skip 15 seconds, ↑/↓ change volume, and Esc goes back or closes. Every control has a VoiceOver label, and the scrubber reads as a time.
 - **Mixes too:** paste a YouTube Mix (`list=RD…`) and its first 50 tracks become the queue. YouTube only
   generates Mixes for some videos, mostly music; when there is none, just that video plays and Undertone says so.
 - **Saved links:** press ★ on the track you're hearing (from a Mix or playlist too) and it lands in the ★ list next
