@@ -15,6 +15,7 @@ struct URLBar: View {
             Image(systemName: "link")
                 .foregroundStyle(.secondary)
                 .font(.system(size: 12))
+                .accessibilityHidden(true)
             TextField("Paste a link",text: $state.urlText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
@@ -29,6 +30,7 @@ struct URLBar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Clear")
+                .accessibilityLabel("Clear Link")
             }
             RecentLinksMenu()
             SavedLinksMenu()
@@ -100,6 +102,7 @@ struct RecentLinksMenu: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Recent links")
+        .accessibilityLabel("Recent Links")
     }
 }
 
@@ -147,5 +150,6 @@ struct SavedLinksMenu: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Saved links")
+        .accessibilityLabel("Saved Links")
     }
 }

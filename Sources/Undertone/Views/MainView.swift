@@ -42,6 +42,7 @@ struct MainView: View {
             Image(systemName: "waveform")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.tint)
+                .accessibilityHidden(true)
             Text("Undertone")
                 .font(.system(size: 14, weight: .semibold))
             Spacer()
@@ -75,6 +76,8 @@ struct IconButton: View {
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
         .help(help)
+        // .help is only a tooltip and hint; without a label VoiceOver reads the SF Symbol name.
+        .accessibilityLabel(help)
     }
 }
 
