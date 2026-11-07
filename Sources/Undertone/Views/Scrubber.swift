@@ -21,6 +21,10 @@ struct Scrubber: View {
             )
             .controlSize(.small)
             .disabled(duration <= 0 || engine.isResolving)
+            .overlay(alignment: .bottom) {
+                ChapterTicks(starts: engine.track?.chapters.map(\.start) ?? [], duration: duration)
+                    .offset(y: 4)
+            }
             HStack {
                 Text(TimeFormat.clock(shown))
                 Spacer()
@@ -32,6 +36,32 @@ struct Scrubber: View {
             }
             .font(.caption2.monospacedDigit())
             .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// A short tick under the scrubber track at each chapter start (the first, at 0:00, is the track's own start).
+private struct ChapterTicks: View {
+    let starts: [Double]
+    let duration: Double
+    /// Where a small slider's track begins and ends inside its frame: half the knob's width.
+    private let trackInset: CGFloat = 9
+
+    var body: some View {
+        if duration > 0, starts.count > 1 {
+            GeometryReader { geo in
+                let width = geo.size.width - trackInset * 2
+                ForEach(Array(starts.enumerated()), id: \.offset) { _, start in
+                    if start > 0, start < duration {
+                        Capsule()
+                            .fill(.tertiary)
+                            .frame(width: 1.5, height: 4)
+                            .position(x: trackInset + width * start / duration, y: 2)
+                    }
+                }
+            }
+            .frame(height: 4)
+            .allowsHitTesting(false)
         }
     }
 }

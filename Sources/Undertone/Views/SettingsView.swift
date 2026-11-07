@@ -54,7 +54,7 @@ struct SettingsView: View {
                     Text("Tip: install to /Applications first so the login item survives rebuilds.").font(.caption2).foregroundStyle(.tertiary)
                 }
                 if loginRequiresApproval {
-                    Button("Approve in System Settings…") { LaunchAtLogin.openSystemSettings() }.controlSize(.mini)
+                    Button("Approve in System Settings…") { LaunchAtLogin.openSystemSettings() }.controlSize(.small)
                 }
                 if let loginError {
                     Text(loginError).font(.caption2).foregroundStyle(.red)
@@ -66,7 +66,7 @@ struct SettingsView: View {
                     Text(audioCacheLabel).font(.caption)
                     Spacer()
                     Button("Clear") { engine.clearAudioCache() }
-                        .controlSize(.mini)
+                        .controlSize(.small)
                         .disabled(engine.audioCacheBytes == 0)
                 }
                 Text("Tracks you play are kept so replays need no download.")
@@ -97,7 +97,7 @@ struct SettingsView: View {
                         Text(service.installCommand).font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                 }
-                .controlSize(.mini)
+                .controlSize(.small)
             }
 
             HStack {
@@ -120,12 +120,12 @@ struct SettingsView: View {
         }
     }
 
+    /// Sentence-case semibold headers, as System Settings uses (not the older uppercase grouped-list style).
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .kerning(0.5)
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
             content()
         }
     }

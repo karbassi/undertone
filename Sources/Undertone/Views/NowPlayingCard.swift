@@ -26,9 +26,11 @@ struct NowPlayingCard: View {
                             .foregroundStyle(.tint)
                     }
                 } else if let track = engine.track {
+                    // One line when a chapter line follows, so the text stays about as tall as the artwork.
                     Text(track.title)
                         .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(2)
+                        .lineLimit(engine.chapter == nil ? 2 : 1)
+                        .help(track.title)
                     if let chapter = engine.chapter {
                         Text(chapter.title)
                             .font(.caption.weight(.medium))
