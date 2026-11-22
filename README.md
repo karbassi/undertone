@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **This fork is now [Sorl](https://github.com/karbassi/sorl)** and this repo is archived. Install with `brew install --cask karbassi/tap/sorl`; an existing `undertone` cask moves to `sorl` on `brew upgrade`, and your settings and audio cache come along on first launch.
+
 <div align="center">
 
 <img src="docs/icon.png" width="96" alt="Undertone icon">
